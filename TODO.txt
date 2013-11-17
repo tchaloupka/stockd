@@ -1,0 +1,23 @@
+TODOs:
+========
+
+- make selection indicator to output just selected values from the output of chained indicator (for example just MACD line from MACD indicator, or just Close price from whole Bar)
+- create base indicator class and inherit indicators so we can:
+    - use indicator as an input for another indicator - make chain of them
+- create data source maybe as a special indicator which provides bar
+    - input from file/stream/string
+    - read from Ninja Trader data format
+    - read from Trade Station data format
+- create data source to input any values from CSV as an indicator input
+- create time frame converter to convert input data to different timeframes - so we can work multitimeframe and also on the different stocks at the same time
+- create evaluator factory to setup indicator chain to evaluate values
+    - for example make something like SMA(HeikenAshi, 10) possible (evaluate SMA from HeikenAshi average bars, which are made from standard bars)
+    - need to assert indicator input and output types so the chain gives sense
+    - evaluate with BFS
+- add buffer indicator to return also older values from the chained indicators - as an input to the neural network
+- add normalize indicator to normalize chained indicator outputs
+    - only outputs with the same meaning should be normalized
+- output values from evaluator to the file -> to work with evaluated indicator values externally (as an input for a neural network for example)
+- add preview param to add methods so we can see what the next value will be if its from closed bar - usable for live calculations from tick values as internal state of indicator is not changed
+- make benchmarks for indicators
+- make unit-threaded tests

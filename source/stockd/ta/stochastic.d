@@ -1,0 +1,339 @@
+module stockd.ta.stochastic;
+
+import stockd.defs.bar;
+import stockd.ta.sma;
+
+/**
+ * Stochastic Oscillator
+ * 
+ * Ref: <a href="http://stockcharts.com/school/doku.php?id=chart_school:technical_indicators:stochastic_oscillato">stockcharts.com</a>
+ * 
+ * Developed by George C. Lane in the late 1950s, the Stochastic Oscillator is a momentum indicator that shows the location of the close 
+ * relative to the high-low range over a set number of periods. According to an interview with Lane, the Stochastic Oscillator 
+ * "doesn't follow price, it doesn't follow volume or anything like that. It follows the speed or the momentum of price. 
+ * As a rule, the momentum changes direction before price." As such, bullish and bearish divergences in the Stochastic Oscillator can be 
+ * used to foreshadow reversals. This was the first, and most important, signal that Lane identified. 
+ * Lane also used this oscillator to identify bull and bear set-ups to anticipate a future reversal. 
+ * Because the Stochastic Oscillator is range bound, is also useful for identifying overbought and oversold levels.
+ * 
+ * Calculation:
+ *      %K = (Current Close - Lowest Low)/(Highest High - Lowest Low) * 100
+ *      %D = 3-day SMA of %K
+ * 
+ * Where:
+ *      Lowest Low = lowest low for the look-back period
+ *      Highest High = highest high for the look-back period
+ *      %K is multiplied by 100 to move the decimal point two places
+ * 
+ * Full Stochastic Oscillator:
+ *      Full %K = Fast %K smoothed with X-period SMA
+ *      Full %D = X-period SMA of Full %K
+ */
+class Stochastic
+{
+    private ushort period, kSmooth, dSmooth;
+
+    private bool buffFull;
+    private bool slowKBuffFull;
+    private bool slowDBuffFull;
+
+    private ushort idx, slowKIdx, slowDIdx;
+    private double[] minBuffer, maxBuffer;
+    private double min = int.max;
+    private double max = 0;
+
+    private double lastKSum = 0, lastDSum = 0;
+    private double[] slowKBuffer, slowDBuffer;
+    private double prevFastK = 50;
+
+    this(ushort period = 14, ushort kSmooth = 3, ushort dSmooth = 7)
+    {
+        assert(period > 0);
+        assert(kSmooth > 0);
+        assert(dSmooth > 0);
+
+        this.period = period;
+        this.kSmooth = kSmooth;
+        this.dSmooth = dSmooth;
+
+        this.minBuffer = new double[period];
+        this.maxBuffer = new double[period];
+        this.slowKBuffer = new double[period];
+        this.slowDBuffer = new double[period];
+    }
+
+    void add(Bar bar, out double k, out double d)
+    {
+        //get MAX High
+        bool genMax = false;
+        if (buffFull)
+        {
+            if (max == maxBuffer[idx]) genMax = true;
+            else if (bar.high > max) { max = bar.high; }
+        }
+        else
+        {
+            if (idx == 0) { max = bar.high; }
+            else if (bar.high > max) { max = bar.high; }
+        }
+        
+        maxBuffer[idx] = bar.high;
+        
+        if (genMax == true)
+        {
+            max = maxBuffer[0];
+            for (int i = 1; i < period; i++)
+            {
+                if (maxBuffer[i] > max) max = maxBuffer[i];
+            }
+        }
+        
+        //Get Min Low
+        bool genMin = false;
+        if (buffFull)
+        {
+            if (min == minBuffer[idx]) genMin = true;
+            else if (bar.low < min) { min = bar.low; }
+        }
+        else
+        {
+            if (idx == 0) { min = bar.low; }
+            else if (bar.low < min) { min = bar.low; }
+        }
+        
+        minBuffer[idx] = bar.low;
+        
+        if (genMin == true)
+        {
+            min = minBuffer[0];
+            for (int i = 1; i < period; i++)
+            {
+                if (minBuffer[i] < min) min = minBuffer[i];
+            }
+        }
+        
+        //increment index
+        if (++idx == period)
+        {
+            buffFull = true;
+            idx = 0;
+        }
+        
+        double nom = bar.close - min;
+        double den = max - min;
+        
+        prevFastK = den < 0.000000000001 ? prevFastK : 100 * nom / den;
+        
+        //Smooth FastK => SlowK
+        if(!slowKBuffFull)
+        {
+            slowKBuffer[slowKIdx++] = prevFastK;
+            lastKSum += prevFastK;
+            
+            if(slowKIdx == kSmooth)
+            {
+                slowKIdx = 0;
+                slowKBuffFull = true;
+                k = lastKSum / kSmooth;
+            }
+            else k = lastKSum/(slowKIdx);
+        }
+        else
+        {
+            lastKSum -= slowKBuffer[slowKIdx];
+            slowKBuffer[slowKIdx++] = prevFastK;
+            lastKSum += prevFastK;
+            if(slowKIdx==kSmooth) slowKIdx = 0;
+            
+            if(lastKSum<0) lastKSum = 0; //due to double precission
+            
+            k = lastKSum / kSmooth;
+            if(k>100) k = 100; //due to double precission
+        }
+        
+        //Smooth SlowK => SlowD
+        if(!slowDBuffFull)
+        {
+            slowDBuffer[slowDIdx++] = k;
+            lastDSum += k;
+            
+            if(slowDIdx == dSmooth)
+            {
+                slowDIdx = 0;
+                slowDBuffFull = true;
+                d = lastDSum / dSmooth;
+            }
+            else d = lastDSum/(slowDIdx);
+        }
+        else
+        {
+            lastDSum -= slowDBuffer[slowDIdx];
+            slowDBuffer[slowDIdx++] = k;
+            lastDSum += k;
+            if(slowDIdx == dSmooth) slowDIdx = 0;
+            
+            if(lastDSum<0) lastDSum = 0; //due to double precission
+            
+            d = lastDSum / dSmooth;
+            if(d > 100) d = 100;    //due to double precission
+        }
+    }
+
+    static void evaluate(const ref Bar[] input, ushort period, ushort kSmooth, ushort dSmooth, ref double[] slowK, ref double[] slowD)
+    {
+        assert(input != null);
+        assert(slowK != null);
+        assert(slowD != null);
+        assert(input.length == slowK.length);
+        assert(input.length == slowD.length);
+        assert(input.length > 0);
+        assert(period > 0);
+        assert(kSmooth > 0);
+        assert(dSmooth > 0);
+
+        int trailingIdx = 0 - (period - 1);
+        long maxIdx = -1;
+        long minIdx = -1;
+        ulong today = 0;
+        double max = 0, min = int.max, tmp;
+        ulong i;
+        double prevFastK = 50;
+        double nom, den;
+        
+        while (today < input.length)
+        {
+            //Get MAX High
+            tmp = input[today].high;
+            
+            if (maxIdx < trailingIdx)
+            {
+                maxIdx = trailingIdx;
+                max = input[maxIdx].high;
+                i = maxIdx;
+                while (++i <= today)
+                {
+                    tmp = input[i].high;
+                    if (tmp >= max)
+                    {
+                        max = tmp;
+                        maxIdx = i;
+                    }
+                }
+            }
+            else if (tmp >= max)
+            {
+                max = tmp;
+                maxIdx = today;
+            }
+            
+            //Get Min Low
+            tmp = input[today].low;
+            
+            if (minIdx < trailingIdx)
+            {
+                minIdx = trailingIdx;
+                min = input[minIdx].low;
+                i = minIdx;
+                while (++i <= today)
+                {
+                    tmp = input[i].low;
+                    if (tmp <= min)
+                    {
+                        min = tmp;
+                        minIdx = i;
+                    }
+                }
+            }
+            else if (tmp <= min)
+            {
+                min = tmp;
+                minIdx = today;
+            }
+            
+            //Get FastK
+            nom = input[today].close - min;
+            den = max - min;
+            
+            prevFastK = den < 0.000000000001 ? prevFastK : 100 * nom / den;
+            
+            slowK[today++] = prevFastK;
+            trailingIdx++;
+        }
+        
+        //smooth FastK
+        Sma.evaluate(slowK, kSmooth, slowK);
+        
+        //create SlowD
+        Sma.evaluate(slowK, dSmooth, slowD);
+    }
+}
+
+unittest
+{
+    import std.csv;
+    import std.math;
+    import std.stdio;
+    import std.datetime;
+    
+    struct Layout {double high; double low; double close;}
+    
+    auto strBars = r"127.00900;125.35740;126.81000
+127.61590;126.16330;126.35000
+126.59110;124.92960;126.33000
+127.34720;126.09370;126.10000
+128.17300;126.81990;126.90000
+128.43170;126.48170;127.00000
+127.36710;126.03400;126.20000
+126.42200;124.83010;125.00000
+126.89950;126.39210;126.50000
+126.84980;125.71560;126.00000
+125.64600;124.56150;125.00000
+125.71560;124.57150;125.00000
+127.15820;125.06890;126.00000
+127.71540;126.85970;127.28760
+127.68550;126.63090;127.17810
+128.22280;126.80010;128.01380
+128.27250;126.71050;127.10850
+128.09340;126.80010;127.72530
+128.27250;126.13350;127.05870
+127.73530;125.92450;127.32730
+128.77000;126.98910;128.71030
+129.28730;127.81480;127.87450
+130.06330;128.47150;128.58090
+129.11820;128.06410;128.60080
+129.28730;127.60590;127.93420
+128.47150;127.59600;128.11330
+128.09340;126.99900;127.59600
+128.65060;126.89950;127.59600
+129.13810;127.48650;128.69040
+128.64060;127.39700;128.27250";
+    
+    auto records = csvReader!Layout(strBars,';');
+    Bar[] bars;
+    foreach(r; records)
+    {
+        bars ~= Bar(DateTime(2010, 1, 1, 1), r.close, r.high, r.low, r.close);
+    }
+
+    double[] expectedK = [87.95108, 65.95030, 61.34393, 46.54998, 52.15049, 54.47970, 52.04842, 33.37051, 29.11941, 27.85521, 30.05948, 18.38104, 19.94298, 39.64567, 58.40525, 75.74975, 74.20719, 78.92012, 70.69402, 73.60043, 79.21167, 81.07192, 80.58069, 72.19280, 69.23506, 65.20178, 54.19122, 47.24283, 49.20025, 54.64869];
+    double[] expectedD = [87.95108, 76.95069, 71.74844, 65.44882, 62.78915, 61.40425, 60.06770, 52.27048, 47.00892, 42.22482, 39.86903, 35.04483, 30.11101, 28.33919, 31.91558, 38.57705, 45.19877, 52.17886, 59.65214, 67.31749, 72.96978, 76.20787, 76.89801, 76.61024, 75.22666, 74.44205, 71.66931, 67.10233, 62.54923, 58.84466];
+    double[] evalK = new double[bars.length];
+    double[] evalD = new double[bars.length];
+    
+    ushort period = 14;
+    ushort kSmooth = 3;
+    ushort dSmooth = 7;
+    
+    Stochastic.evaluate(bars, period, kSmooth, dSmooth, evalK, evalD);
+    assert(approxEqual(expectedK, evalK));
+    assert(approxEqual(expectedD, evalD));
+    
+    auto stoch = new Stochastic(period, kSmooth, dSmooth);
+    for(int i=0; i<bars.length; i++)
+    {
+        double k, d;
+        stoch.add(bars[i], k, d);
+        assert(approxEqual(expectedK[i], k));
+        assert(approxEqual(expectedD[i], d));
+    }
+}
