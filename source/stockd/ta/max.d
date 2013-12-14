@@ -22,7 +22,7 @@ class Max
     }
 
     /// Add next value, returns current max for the period
-    double add(double value)
+    pure nothrow double add(double value)
     {
         bool genMax = false;
         if (isBuffFull)
@@ -64,13 +64,11 @@ class Max
         assert(period > 0);
         
         double max = int.min, tmp;
-        long trailingIdx = 0 - (period - 1);
-        long today = 0;
-        long maxIdx = -1;
-        long i;
-        long length = input.length;
-        
-        while (today < length)
+        ptrdiff_t trailingIdx = 0 - (period - 1);
+        ptrdiff_t maxIdx = -1;
+        size_t today, i;
+
+        while (today < input.length)
         {
             tmp = input[today];
             

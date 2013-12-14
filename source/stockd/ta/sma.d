@@ -24,7 +24,7 @@ class Sma
     }
     
     /// Evaluate next value
-    double add(double value)
+    pure nothrow double add(double value)
     {
         if(!isFull)
         {
@@ -61,7 +61,7 @@ class Sma
         double sum = 0;
         double[] buffer = new double[period]; //to allow input and output arrays be the same
         ushort idx = 0;
-        ulong i = 0;
+        size_t i = 0;
         
         for(; i<period; i++)
         {

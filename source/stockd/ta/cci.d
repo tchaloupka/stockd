@@ -45,7 +45,7 @@ class CCI
         this.buffer = new double[period];
     }
 
-    double add(Bar value)
+    pure nothrow double add(Bar value)
     {
         double typical = (value.high + value.low + value.close)/3;
         double sma = 0;
@@ -96,7 +96,7 @@ class CCI
         double sma = 0;
         double sum = 0;
         double mean = 0;
-        ulong i;
+        size_t i;
         
         for(i=0; i<period; i++)
         {

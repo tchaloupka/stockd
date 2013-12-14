@@ -17,7 +17,7 @@ class TP
         // Constructor code
     }
 
-    double Add(Bar value)
+    pure nothrow double Add(Bar value)
     {
         return (value.high + value.low + value.close)/3;
     }
@@ -28,7 +28,7 @@ class TP
         assert(output != null);
         
         Bar iBar;
-        for(ulong i = 0; i<input.length; i++)
+        for(size_t i = 0; i<input.length; i++)
         {
             iBar = input[i];
             output[i] = (iBar.high + iBar.low + iBar.close)/3;

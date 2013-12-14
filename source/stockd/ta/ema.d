@@ -28,7 +28,7 @@ class Ema
     }
 
     /// Evaluate next value
-    double add(double value)
+    pure nothrow double add(double value)
     {
         if(!hasVal)
         {
@@ -72,7 +72,7 @@ class Ema
         double  m1   = 2.0/(1 + period);
         double  m2   = 1-m1;
         double  prev = 0;
-        ulong   i    = 0;
+        size_t   i    = 0;
 
         if(sma == true)
         {

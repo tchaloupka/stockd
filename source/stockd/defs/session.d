@@ -1,4 +1,4 @@
-module stockd.ta.utils;
+module stockd.defs.session;
 
 import std.datetime;
 import std.stdio;
@@ -12,7 +12,7 @@ import std.stdio;
  *      newTime - DateTime of the new bar
  *      sessionStart - TimeOfDay the trading session starts
  */
-static bool isNextSession(ref DateTime current, DateTime newTime, TimeOfDay sessionStart)
+static pure bool isNextSession(ref DateTime current, DateTime newTime, TimeOfDay sessionStart)
 {
     if(current == DateTime.min() || (newTime - current).total!"minutes" >= 1440) //first bar or next session
     {

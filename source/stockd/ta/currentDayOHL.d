@@ -2,7 +2,7 @@ module stockd.ta.currentDayOHL;
 
 import std.datetime;
 import stockd.defs.bar;
-import stockd.ta.utils;
+import stockd.defs.session;
 
 /**
  * Indicates che current trading session day open, highest and lowest price to see the potencial price movement
@@ -26,7 +26,7 @@ class CurrentDayOHL
         this.sessionStart = sessionStart;
     }
 
-    void add(Bar value, out double open, out double high, out double low)
+    pure void add(Bar value, out double open, out double high, out double low)
     {
         if(isNextSession(lastTime, value.time, sessionStart))
         {
@@ -62,7 +62,7 @@ class CurrentDayOHL
 
         DateTime lastTime = DateTime.min;
         
-        for(ulong i=0; i<input.length; i++)
+        for(size_t i=0; i<input.length; i++)
         {
             if(isNextSession(lastTime, input[i].time, sessionStart))
             {

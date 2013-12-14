@@ -62,7 +62,7 @@ class Stochastic
         this.slowDBuffer = new double[period];
     }
 
-    void add(Bar bar, out double k, out double d)
+    pure nothrow void add(Bar bar, out double k, out double d)
     {
         //get MAX High
         bool genMax = false;
@@ -191,12 +191,12 @@ class Stochastic
         assert(kSmooth > 0);
         assert(dSmooth > 0);
 
-        int trailingIdx = 0 - (period - 1);
-        long maxIdx = -1;
-        long minIdx = -1;
-        ulong today = 0;
+        ptrdiff_t trailingIdx = 0 - (period - 1);
+        ptrdiff_t maxIdx = -1;
+        ptrdiff_t minIdx = -1;
+        size_t today = 0;
         double max = 0, min = int.max, tmp;
-        ulong i;
+        size_t i;
         double prevFastK = 50;
         double nom, den;
         

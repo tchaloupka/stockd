@@ -33,7 +33,7 @@ class ATR
         this.lPeriod = cast(ushort)(period - 1);
     }
 
-    double add(Bar bar)
+    pure nothrow double add(Bar bar)
     {
         m1 = bar.high - bar.low;
         
@@ -79,7 +79,7 @@ class ATR
         double prevClose;
         double m1, m2, m3;
         
-        for(ulong i=0; i<input.length; i++)
+        for(size_t i=0; i<input.length; i++)
         {
             m1 = input[i].high - input[i].low;
             

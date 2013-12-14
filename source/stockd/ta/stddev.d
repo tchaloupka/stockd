@@ -41,7 +41,7 @@ class StdDev
         this.buffer = new double[period];
     }
 
-    double add(double value)
+    pure nothrow double add(double value)
     {
         //get Average
         if(!isFull)
@@ -96,7 +96,7 @@ class StdDev
         double sum = 0, avg;
         double[] buffer = new double[period]; //to allow input and output arrays be the same
         ushort idx = 0;
-        ulong i = 1;
+        size_t i = 1;
 
         sum += (buffer[0] = input[0]);
         output[0] = 0;

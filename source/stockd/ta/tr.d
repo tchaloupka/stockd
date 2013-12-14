@@ -33,7 +33,7 @@ class TR
         // Constructor code
     }
 
-    double add(Bar value)
+    pure nothrow double add(Bar value)
     {
         m1 = value.high - value.low;
         
@@ -67,7 +67,7 @@ class TR
         
         output[0] = input[0].high - input[0].low;
         
-        for(ulong i=1; i<input.length; i++)
+        for(size_t i=1; i<input.length; i++)
         {
             m1 = input[i].high - input[i].low;
             m2 = abs(input[i].low - prevClose);

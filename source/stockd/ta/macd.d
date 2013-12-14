@@ -56,7 +56,7 @@ class MACD
      *      signal  - smoothed macd line
      *      hist    - difference between macd and signal lines
      */
-    void add(double value, out double macd, out double signal, out double hist)
+    pure nothrow void add(double value, out double macd, out double signal, out double hist)
     {
         double fast = fastEma.add(value);
         double slow = slowEma.add(value);
@@ -85,14 +85,14 @@ class MACD
         Ema.evaluate(input, fastPeriod, signal);
         Ema.evaluate(input, slowPeriod, hist);
         
-        for(ulong i=0; i<input.length; i++)
+        for(size_t i=0; i<input.length; i++)
         {
             macd[i] = signal[i] - hist[i];
         }
         
         Ema.evaluate(macd, smooth, signal);
         
-        for(ulong i=0; i<input.length; i++)
+        for(size_t i=0; i<input.length; i++)
         {
             hist[i] = macd[i] - signal[i];
         }

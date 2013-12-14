@@ -29,33 +29,37 @@ class HeikenAshi
 {
     private Bar prevBar = Bar();
     private bool first = true;
+    private double open, close;
 
     this()
     {
         // Constructor code
     }
 
-    Bar Add(Bar value)
+    pure nothrow Bar Add(Bar value)
     {
         if(first)
         {
             //return input bar
-            prevBar.time = value.time;
-            prevBar.open = (value.open + value.close) * 0.5; // Calculate the close
-            prevBar.high = value.high;
-            prevBar.low = value.low;
-            prevBar.close = (value.open + value.high + value.low + value.close) * 0.25; // Calculate the close
-            prevBar.volume = value.volume;
+            prevBar = Bar(
+                value.time,
+                (value.open + value.close) * 0.5, // Calculate the close
+                value.high,
+                value.low,
+                (value.open + value.high + value.low + value.close) * 0.25, // Calculate the close
+                value.volume);
             first = false;
         }
         else
         {
-            prevBar.time = value.time;
-            prevBar.open = (prevBar.open + prevBar.close) * 0.5; // Calculate the open
-            prevBar.close = (value.open + value.high + value.low + value.close) * 0.25; // Calculate the close
-            prevBar.high = max(value.high, prevBar.open, prevBar.close); // Calculate the high
-            prevBar.low = min(value.low, prevBar.open, prevBar.close); // Calculate the low
-            prevBar.volume = value.volume;
+            close = (value.open + value.high + value.low + value.close) * 0.25; // Calculate the close
+            prevBar = Bar(
+                value.time,
+                open = ((prevBar.open + prevBar.close) * 0.5), // Calculate the open
+                max(value.high, open, close), // Calculate the high
+                min(value.low, open, close), // Calculate the low
+                close,
+                value.volume);
         }
 
         return prevBar;
@@ -68,22 +72,27 @@ class HeikenAshi
         assert(input.length == output.length);
         assert(input.length > 0);
 
-        //return input bar
-        output[0].time = input[0].time;
-        output[0].open = (input[0].open + input[0].close) * 0.5; // Calculate the close
-        output[0].high = input[0].high;
-        output[0].low = input[0].low;
-        output[0].close = (input[0].open + input[0].high + input[0].low + input[0].close) * 0.25; // Calculate the close
-        output[0].volume = input[0].volume;
+        double open, close;
 
-        for(ulong i=1; i<input.length; i++)
+        //return input bar
+        output[0] = Bar(
+            input[0].time,
+            (input[0].open + input[0].close) * 0.5, // Calculate the close
+            input[0].high,
+            input[0].low,
+            (input[0].open + input[0].high + input[0].low + input[0].close) * 0.25, // Calculate the close
+            input[0].volume);
+
+        for(size_t i=1; i<input.length; i++)
         {
-            output[i].time = input[i].time;
-            output[i].open = (output[i-1].open + output[i-1].close) * 0.5; // Calculate the open
-            output[i].close = (input[i].open + input[i].high + input[i].low + input[i].close) * 0.25; // Calculate the close
-            output[i].high = max(input[i].high, output[i].open, output[i].close); // Calculate the high
-            output[i].low = min(input[i].low, output[i].open, output[i].close); // Calculate the low
-            output[i].volume = input[i].volume;
+            close = (input[i].open + input[i].high + input[i].low + input[i].close) * 0.25; // Calculate the close
+            output[i] = Bar(
+                input[i].time,
+                open = ((output[i-1].open + output[i-1].close) * 0.5), // Calculate the open
+                max(input[i].high, open, close), // Calculate the high
+                min(input[i].low, open, close), // Calculate the low
+                close,
+                input[i].volume);
         }
     }
 }

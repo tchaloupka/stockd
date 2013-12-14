@@ -42,7 +42,7 @@ class Bollinger
         this.buffer = new double[period];
     }
 
-    void add(double value, out double middle, out double upper, out double lower)
+    pure nothrow void add(double value, out double middle, out double upper, out double lower)
     {
         //get Average
         if(!isFull)
@@ -106,7 +106,7 @@ class Bollinger
         double sum = 0;
         double[] buffer = new double[period]; //to allow input and output arrays be the same
         ushort idx = 0;
-        ulong i = 1;
+        size_t i = 1;
         
         sum += (buffer[0] = input[0]);
         middle[0] = input[0];

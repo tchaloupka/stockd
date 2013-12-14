@@ -1,4 +1,4 @@
-module stockd.ta.priceChannels;
+module stockd.ta.median;
 
 import stockd.defs.bar;
 
@@ -28,7 +28,7 @@ class Median
         this.lBuffer = new double[period];
     }
 
-    double add(Bar value)
+    pure nothrow double add(Bar value)
     {
         bool genMax = false;
         bool genMin = false;
@@ -83,10 +83,9 @@ class Median
         assert(period > 0);
 
         double min = int.max, max = int.min;
-        long trailingIdx = 0 - (period - 1);
-        long today = 0;
-        long minIdx = -1, maxIdx = -1;
-        long i;
+        ptrdiff_t trailingIdx = 0 - (period - 1);
+        ptrdiff_t minIdx = -1, maxIdx = -1;
+        size_t today, i;
         
         while (today < input.length)
         {

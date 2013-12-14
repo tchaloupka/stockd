@@ -20,7 +20,7 @@ class Min
     }
 
     /// Add next value, returns current min for the period
-    double add(double value)
+    pure nothrow double add(double value)
     {
         bool genMin = false;
         if (isBuffFull)
@@ -62,13 +62,11 @@ class Min
     	assert(period > 0);
         
         double min = int.max, tmp;
-        long trailingIdx = 0 - (period - 1);
-        long today = 0;
-        long minIdx = -1;
-        long i;
-        long length = input.length;
-        
-        while (today < length)
+        ptrdiff_t trailingIdx = 0 - (period - 1);
+        ptrdiff_t minIdx = -1;
+        size_t today, i;
+
+        while (today < input.length)
         {
             tmp = input[today];
             

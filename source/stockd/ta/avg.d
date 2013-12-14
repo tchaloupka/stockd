@@ -12,7 +12,7 @@ class Avg
         // Constructor code
     }
 
-    double Add(Bar value)
+    pure nothrow double Add(Bar value)
     {
         return (value.open + value.high + value.low + value.close)*0.25;
     }
@@ -23,7 +23,7 @@ class Avg
         assert(output != null);
 
         Bar iBar;
-        for(ulong i = 0; i<input.length; i++)
+        for(size_t i = 0; i<input.length; i++)
         {
             iBar = input[i];
             output[i] = (iBar.open + iBar.high + iBar.low + iBar.close)*0.25;
