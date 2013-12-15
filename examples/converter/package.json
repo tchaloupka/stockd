@@ -1,0 +1,8 @@
+{
+        "name": "converter",
+        "description": "Performs some simple conversions of market data",
+        "authors": [ "Tomáš Chaloupka" ],
+        "dependencies": {
+                "stockd": {"version": "~master", "path": "../../"}
+        }
+}

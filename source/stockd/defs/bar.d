@@ -1,16 +1,48 @@
 module stockd.defs.bar;
 
+import std.algorithm;
 import std.array;
 import std.datetime;
 import std.conv;
 import std.csv;
 import std.stdio;
-import std.string : format;
-import std.typecons : Nullable;
+import std.string;
+import std.typecons;
 
 import stockd.defs.templates;
 
 enum FileFormat {NinjaTrader, TradeStation}
+
+/**
+ * Template whitch helps create Bar from Bar array
+ */
+template createBar(T) 
+    if(is(T==DateTime) || is(T == Date))
+{
+    Bar createBar(T)(in Bar[] bars, T time)
+    {
+        assert(bars.length > 0);
+        
+        auto r = reduce!(
+            (a,b) => a > b.low ? b.low : a, 
+            (a,b) => a < b.high ? b.high : a,
+            (a,b) => a + b.volume)(tuple(0.0, cast(double)int.max, cast(size_t)0), bars);
+        
+        return Bar(time, bars[0].open, r[1], r[0], bars[$-1].close, r[2]);
+    }
+}
+
+/// Template which reads Bars from multiline string
+/// 
+/// Returns:
+/// input range of Bars
+template readBars()
+{
+    auto readBars(string data, FileFormat ff = FileFormat.NinjaTrader)
+    {
+        return data.splitter('\n').map!(b => Bar.fromString(b, ff));
+    }
+}
 
 /**
  * Defines BAR structure
@@ -209,13 +241,14 @@ struct Bar
      */
     static Bar fromString(const string data, FileFormat ff = FileFormat.NinjaTrader)
     {
+        string stripped = data.strip;
         final switch(ff)
         {
             case(FileFormat.NinjaTrader):
-                auto fields = data.split(";");
-                if(fields.length != 5 && fields.length != 6) throw new Exception(data ~ " is not a valid NT format");
+                auto fields = stripped.split(";");
+                if(fields.length != 5 && fields.length != 6) throw new Exception(stripped ~ " is not a valid NT format");
 
-                auto records = csvReader!NTLayout(data,';');
+                auto records = csvReader!NTLayout(stripped,';');
                 auto rec = records.front;
                 if(rec.date.length == 15)
                     return Bar(
@@ -223,11 +256,11 @@ struct Bar
                         rec.open, rec.high, rec.low, rec.close, rec.volume);
                 return Bar(Date.fromISOString(rec.date), rec.open, rec.high, rec.low, rec.close, rec.volume);
             case(FileFormat.TradeStation):
-                auto fields = data.split(",");
-                if(fields.length != 7 && fields.length != 6) throw new Exception(data ~ " is not a valid TS format");
+                auto fields = stripped.split(",");
+                if(fields.length != 7 && fields.length != 6) throw new Exception(stripped ~ " is not a valid TS format");
                 if(fields.length == 6) //short
                 {
-                    auto records = csvReader!TSLayoutShort(data);
+                    auto records = csvReader!TSLayoutShort(stripped);
                     auto rec = records.front;
                     return Bar(
                         Date(to!int(rec.date[6..$]), to!int(rec.date[0..2]), to!int(rec.date[3..5])), // MM/dd/yyyy
@@ -235,7 +268,7 @@ struct Bar
                 }
                 else //long
                 {
-                    auto records = csvReader!TSLayoutLong(data);
+                    auto records = csvReader!TSLayoutLong(stripped);
                     auto rec = records.front;
                     return Bar(
                         DateTime(
