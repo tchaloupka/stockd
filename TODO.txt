@@ -13,11 +13,11 @@ TODOs:
 - create evaluator factory to setup indicator chain to evaluate values
     - for example make something like SMA(HeikenAshi, 10) possible (evaluate SMA from HeikenAshi average bars, which are made from standard bars)
     - need to assert indicator input and output types so the chain gives sense
-    - evaluate with BFS
+    - evaluate with indicator tree
 - add buffer indicator to return also older values from the chained indicators - as an input to the neural network
 - add normalize indicator to normalize chained indicator outputs
     - only outputs with the same meaning should be normalized
 - output values from evaluator to the file -> to work with evaluated indicator values externally (as an input for a neural network for example)
 - add preview param to add methods so we can see what the next value will be if its from closed bar - usable for live calculations from tick values as internal state of indicator is not changed
-- make benchmarks for indicators
+- make benchmarks for indicators and optimisations
 - make unit-threaded tests
