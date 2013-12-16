@@ -11,7 +11,7 @@ import std.typecons;
 
 import stockd.defs.templates;
 
-enum FileFormat {NinjaTrader, TradeStation}
+enum FileFormat {NinjaTrader, TradeStation} //TODO: guess and make it a default in methods
 
 /**
  * Template whitch helps create Bar from Bar array
@@ -24,9 +24,10 @@ template createBar(T)
         assert(bars.length > 0);
         
         auto r = reduce!(
-            (a,b) => a > b.low ? b.low : a, 
-            (a,b) => a < b.high ? b.high : a,
-            (a,b) => a + b.volume)(tuple(0.0, cast(double)int.max, cast(size_t)0), bars);
+            (a,b) => a > b.low ? b.low : a, // get min low
+            (a,b) => a < b.high ? b.high : a, // get max high
+            (a,b) => a + b.volume)  // sum volume
+            (tuple(cast(double)int.max, 0.0, cast(size_t)0), bars);
         
         return Bar(time, bars[0].open, r[1], r[0], bars[$-1].close, r[2]);
     }
@@ -143,6 +144,7 @@ struct Bar
      */
     string toString(FileFormat ff = FileFormat.NinjaTrader) const
     {
+    	//TODO: add posibility to chose target TimeZone
         final switch(ff)
         {
             case FileFormat.NinjaTrader:
@@ -184,6 +186,10 @@ struct Bar
      */
     static Nullable!FileFormat guessFileFormat(in string data)
     {
+    	//TODO: use regex
+	    //TODO" add variant from http://www.intradaystockdata.com/sample_files.html
+	    //TODO" add variants from http://www.histdata.com/f-a-q/data-files-detailed-specification/
+
         try
         {
             auto fields = data.split(";");
@@ -241,6 +247,7 @@ struct Bar
      */
     static Bar fromString(const string data, FileFormat ff = FileFormat.NinjaTrader)
     {
+    	//TODO: add possibility to specify source TimeZone
         string stripped = data.strip;
         final switch(ff)
         {

@@ -26,11 +26,19 @@ private struct TimeFrameConv(T) if (isInputRange!T && is(ElementType!T : Bar))
     private T _input;
     private uint _factor;
     private Bar[] _buffer;
+    private Bar[] _tfGuessBuffer;
     private Bar[] _outBuffer;
     private TimeFrame _targetTF;
-    private DateTime lastWaitTime;
+    private DateTime _lastWaitTime;
+    private ubyte _eodHour;
 
-    this(T input, uint factor, ubyte eodHour = 22)  //TODO: check if differ in summer and winter times - than session object should be passed
+    /**
+     * Params:
+     *  input - input bar range
+     *  factor - time frame multiplyer
+     *  eodHour - hour at which trading session ends in UTC time
+     */
+    this(T input, uint factor, ubyte eodHour = 22)  //TODO: check if differ in summer and winter times - than session object should be passed (it would be more generic)
     {
         enforce(input.empty == false);
         enforce(factor > 0);
@@ -39,11 +47,11 @@ private struct TimeFrameConv(T) if (isInputRange!T && is(ElementType!T : Bar))
         this._factor = factor;
 
         //init TimeFrame
-        _buffer ~= takeOne();
+        _tfGuessBuffer ~= takeOne();
         if(!_input.empty)
         {
-            _buffer ~= takeOne();
-            _targetTF = TimeFrame(_buffer[1].time - _buffer[0].time) * factor;
+            _tfGuessBuffer ~= takeOne();
+            _targetTF = TimeFrame(_tfGuessBuffer[1].time - _tfGuessBuffer[0].time) * factor;
         }
 
         //prepare next Bar
@@ -66,22 +74,58 @@ private struct TimeFrameConv(T) if (isInputRange!T && is(ElementType!T : Bar))
     {
         if(_outBuffer.length > 1) 
         {
-            _outBuffer = _outBuffer[1..$];
+            _outBuffer.popFront();
             return;
         }
-        else _outBuffer = _outBuffer[0..0];
+        else _outBuffer = null;
 
-        if(_input.empty && _buffer.length>0)
+        //read from input till we have next Bar or input is empty
+        while(!_input.empty)
         {
-            //just return last bar
-            if(_targetTF.origin >= Origin.day) _outBuffer ~= createBar!(Date)(_buffer, lastWaitTime.date);
-            else _outBuffer ~= createBar!(DateTime)(_buffer, lastWaitTime);
+            auto next = takeOne();
+            auto waitTime = nextValidTime(next);
+
+            if (next.time > _lastWaitTime)
+            {
+                assert(_lastWaitTime < waitTime);
+
+                //add one from buffer if there are some bars waiting
+                if(_buffer.length > 0) _outBuffer ~= createBarFromBuffer();
+
+                if (next.time == waitTime)
+                {
+                    //just return this one
+                    _outBuffer ~= next;
+                }
+                else _buffer ~= next; //add to buffer and wait for next
+            }
+            else
+            {
+                assert(_lastWaitTime == waitTime);
+
+                //add to buffer
+                _buffer ~= next;
+
+                if(next.time == _lastWaitTime)
+                {
+                    //we've got next with exact time! => create output bar and clear buffer
+                    _outBuffer ~= createBarFromBuffer();
+                }
+            }
+            
+            _lastWaitTime = waitTime;
+            //filter out weekend bars from input
+            if (_targetTF.origin == Origin.day && _factor == 1 && _outBuffer.length > 0)
+            {
+                _outBuffer = _outBuffer.filter!(b => b.time.dayOfWeek != DayOfWeek.sun && b.time.dayOfWeek != DayOfWeek.sat).array;
+            }
+            if(_outBuffer.length > 0) break; //we have the next bar
         }
-        else
+
+        if(_outBuffer.length == 0 && _buffer.length > 0)
         {
-            //read next whole bar
-            //TODO
-            _input.popFront();
+            //return last bars from buffer
+            _outBuffer ~= createBarFromBuffer();
         }
     }
 
@@ -89,10 +133,68 @@ private struct TimeFrameConv(T) if (isInputRange!T && is(ElementType!T : Bar))
     {
         assert(_input.empty == false);
 
-        auto res = _input.front();
+        if(_tfGuessBuffer.length > 0 && _targetTF != TimeFrame.init)
+        {
+            //first return from TF guess buffer
+            auto next = _tfGuessBuffer.front;
+            _tfGuessBuffer.popFront();
+            return next;
+        }
+
+        auto res = _input.front;
         _input.popFront();
 
         return res;
+    }
+
+    /// gets next time we wait for from the current bar
+    private DateTime nextValidTime(ref Bar bar)
+    {
+        final switch(_targetTF.origin)
+        {
+            case Origin.minute:
+                uint rest = bar.time.minute % _factor;
+                if(rest == 0) return bar.time;
+                else return bar.time + dur!"minutes"(_factor - rest);
+            case Origin.hour:
+                auto next = bar.time;
+                if (next.minute != 0) next += dur!"minutes"(60 - next.minute);
+                uint rest = next.hour % _factor;
+                if (rest == 0) return next;
+                else return next + dur!"hours"(_factor - rest);
+            case Origin.day:
+                auto next = bar.time;
+                if (next.minute != 0) next += dur!"minutes"(60 - next.minute);
+                if (next.hour < _eodHour) next += dur!"hours"(_eodHour - next.hour);
+                if (next.hour > _eodHour) next += dur!"hours"(24 - next.hour + _eodHour);
+                if (_factor == 1 || next.dayOfWeek == DayOfWeek.fri)
+                {
+                    if (bar.time == next && bar.time.dayOfWeek == DayOfWeek.sun)
+                    {
+                        //ensure usage of first week session bar
+                        bar.time += dur!"minutes"(1);
+                        return nextValidTime(bar);
+                    }
+                    return next;
+                }
+                //set to friday
+                if (next.dayOfWeek == DayOfWeek.sat) return next + dur!"days"(6);
+                return next + dur!"days"(DayOfWeek.fri - next.dayOfWeek);
+            case Origin.week:
+                return bar.time;
+        }
+    }
+
+    auto createBarFromBuffer()
+    {
+        scope(exit)
+        {
+            //clear buffer
+            _buffer = null;
+        }
+
+        if(_targetTF.origin >= Origin.day) return createBar!(Date)(_buffer, _lastWaitTime.date);
+        else return createBar!(DateTime)(_buffer, _lastWaitTime);
     }
 }
 
@@ -109,11 +211,8 @@ unittest
         20110715 205900;1.41489;1.41561;1.41486;1.41561;15280
         20110715 210000;1.41549;1.41549;1.41532;1.41532;540";
 
-    string[] expected = 
-        [
-            "20110715 205500;1.4154;1.41545;1.41491;1.41498;33450",
-            "20110715 210000;1.415;1.41561;1.41473;1.41532;73360"
-        ];
+    auto expected = readBars("20110715 205500;1.41540;1.41545;1.41491;1.41498;33450\n"
+        ~"20110715 210000;1.41500;1.41561;1.41473;1.41532;73360").array;
 
     //auto bars = barsText.splitter('\n').map!(b => Bar.fromString(b));
     auto bars = readBars(barsText).tfConv!(5);
@@ -122,19 +221,14 @@ unittest
     foreach(b; bars)
     {
         writefln("%s -> %s", i, b);
-        assert(expected[i++] == to!string(b));
+        writefln("%s -> %s expected", i, expected[i]);
+        assert(expected[i++] == b);
     }
     assert(i == 2);
 
     // Test M5 to M5 - should return the same data as input
     barsText = "20110715 205500;1.4154;1.41545;1.41491;1.41498;33450\n"
         ~ "20110715 210000;1.415;1.41561;1.41473;1.41532;73360";
-    
-    expected = 
-    [
-        "20110715 205500;1.4154;1.41545;1.41491;1.41498;33450",
-        "20110715 210000;1.415;1.41561;1.41473;1.41532;73360"
-    ];
     
     //auto bars = barsText.splitter('\n').map!(b => Bar.fromString(b));
     bars = readBars(barsText).tfConv!(1);
@@ -143,7 +237,7 @@ unittest
     foreach(b; bars)
     {
         writefln("%s -> %s", i, b);
-        assert(expected[i++] == to!string(b));
+        assert(expected[i++] == b);
     }
     assert(i == 2);
 }
