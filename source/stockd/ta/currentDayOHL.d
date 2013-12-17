@@ -1,4 +1,4 @@
-module stockd.ta.currentDayOHL;
+module stockd.ta.currentdayohl;
 
 import std.datetime;
 import stockd.defs.bar;

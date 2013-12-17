@@ -1,9 +1,9 @@
-module stockd.data.marketData;
+module stockd.data.marketdata;
 
 /**
  * This class works as an input range of BARs
  */
-class marketData
+class MarketData
 {
     //TODO
     this()

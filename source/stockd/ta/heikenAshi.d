@@ -1,4 +1,4 @@
-module stockd.ta.heikenAshi;
+module stockd.ta.heikenashi;
 
 import std.algorithm;
 import std.stdio;
