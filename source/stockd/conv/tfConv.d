@@ -1,4 +1,4 @@
-module stockd.conv.timeFrameConv;
+module stockd.conv.tfconv;
 
 import std.algorithm;
 import std.datetime;
