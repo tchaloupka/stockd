@@ -80,7 +80,7 @@ private struct TimeFrameConv(T) if (isInputRange!T && is(ElementType!T : Bar))
         else _outBuffer = null;
 
         //read from input till we have next Bar or input is empty
-        while(!_input.empty)
+        while(!_input.empty || !_tfGuessBuffer.empty)
         {
             auto next = takeOne();
             auto waitTime = nextValidTime(next);
@@ -131,7 +131,7 @@ private struct TimeFrameConv(T) if (isInputRange!T && is(ElementType!T : Bar))
 
     private auto ref takeOne()
     {
-        assert(_input.empty == false);
+        assert(_input.empty == false || _tfGuessBuffer.empty == false);
 
         if(_tfGuessBuffer.length > 0 && _targetTF != TimeFrame.init)
         {
@@ -214,9 +214,9 @@ unittest
     auto expected = readBars("20110715 205500;1.41540;1.41545;1.41491;1.41498;33450\n"
         ~"20110715 210000;1.41500;1.41561;1.41473;1.41532;73360").array;
 
-    //auto bars = barsText.splitter('\n').map!(b => Bar.fromString(b));
     auto bars = readBars(barsText).tfConv!(5);
 
+    writeln("Test M1 -> M5");
     int i;
     foreach(b; bars)
     {
@@ -232,12 +232,16 @@ unittest
     
     //auto bars = barsText.splitter('\n').map!(b => Bar.fromString(b));
     bars = readBars(barsText).tfConv!(1);
-    
+
+    writeln("Test M5 -> M5");
     i = 0;
     foreach(b; bars)
     {
         writefln("%s -> %s", i, b);
+        writefln("%s -> %s expected", i, expected[i]);
         assert(expected[i++] == b);
     }
     assert(i == 2);
+
+    //TODO: Add more tests - more time frames, tests with invalid input, etc
 }
