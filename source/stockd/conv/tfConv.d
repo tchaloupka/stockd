@@ -115,6 +115,7 @@ private struct TimeFrameConv(T) if (isInputRange!T && is(ElementType!T : Bar))
             
             _lastWaitTime = waitTime;
             //filter out weekend bars from input
+            //TODO: not sure if this should be here at all -> input validation in marketData range?
             if (_targetTF.origin == Origin.day && _factor == 1 && _outBuffer.length > 0)
             {
                 _outBuffer = _outBuffer.filter!(b => b.time.dayOfWeek != DayOfWeek.sun && b.time.dayOfWeek != DayOfWeek.sat).array;

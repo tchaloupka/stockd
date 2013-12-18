@@ -11,7 +11,7 @@ import std.typecons;
 
 import stockd.defs.templates;
 
-enum FileFormat {NinjaTrader, TradeStation} //TODO: guess and make it a default in methods
+enum FileFormat {ninjaTrader, tradeStation, guess}
 
 /**
  * Template whitch helps create Bar from Bar array
@@ -142,12 +142,14 @@ struct Bar
      * or
      * MM/dd/yyyy,open price, high price, low price, volume
      */
-    string toString(FileFormat ff = FileFormat.NinjaTrader) const
+    string toString(FileFormat ff = FileFormat.ninjaTrader) const
     {
     	//TODO: add posibility to chose target TimeZone
         final switch(ff)
         {
-            case FileFormat.NinjaTrader:
+            case FileFormat.guess:
+                //fall back to the default FileFormat
+            case FileFormat.ninjaTrader:
                 if(hasTOD)
                 {
                     return format("%s %s;%.5f;%.5f;%.5f;%.5f;%d", 
@@ -157,7 +159,7 @@ struct Bar
                 return format("%s;%.5f;%.5f;%.5f;%.5f;%d", 
                       time.date.toISOString,
                       _open, _high, _low, _close, _volume);
-            case FileFormat.TradeStation:
+            case FileFormat.tradeStation:
                 if(hasTOD)
                 {
                     return format("%02d/%02d/%d,%02d%02d,%.5f,%.5f,%.5f,%.5f,%d", 
@@ -199,7 +201,7 @@ struct Bar
                 auto records = csvReader!NTLayout(data,';');
                 auto rec = records.front;
 
-                return Nullable!FileFormat(FileFormat.NinjaTrader);
+                return Nullable!FileFormat(FileFormat.ninjaTrader);
             }
 
             fields = data.split(",");
@@ -209,7 +211,7 @@ struct Bar
                 auto records = csvReader!TSLayoutLong(data);
                 auto rec = records.front;
                 
-                return Nullable!FileFormat(FileFormat.TradeStation);
+                return Nullable!FileFormat(FileFormat.tradeStation);
             }
             if(fields.length == 6)
             {
@@ -217,7 +219,7 @@ struct Bar
                 auto records = csvReader!TSLayoutShort(data);
                 auto rec = records.front;
                 
-                return Nullable!FileFormat(FileFormat.TradeStation);
+                return Nullable!FileFormat(FileFormat.tradeStation);
             }
         }
         catch(CSVException e)
@@ -244,14 +246,18 @@ struct Bar
      * Throws:
      * CSVException if provided string does not conform to the specified FileFormat
      * DateTimeException if the given string is not in the ISO format or
+     * 
+     * Note:
+     * if guess file format is specified, it should be noted that than guesFileFormat is called and if many bars are created this way, every
+     * bar is created this guessing way so it is unnecessary slower -> so for bigger data use guessFileFormat before and call this with its output
      */
-    static Bar fromString(const string data, FileFormat ff = FileFormat.NinjaTrader)
+    static Bar fromString(in string data, FileFormat ff = FileFormat.guess)
     {
-    	//TODO: add possibility to specify source TimeZone
+    	//TODO: add possibility to specify source TimeZone so we can convert input datetime to internal UTC
         string stripped = data.strip;
         final switch(ff)
         {
-            case(FileFormat.NinjaTrader):
+            case(FileFormat.ninjaTrader):
                 auto fields = stripped.split(";");
                 if(fields.length != 5 && fields.length != 6) throw new Exception(stripped ~ " is not a valid NT format");
 
@@ -262,7 +268,7 @@ struct Bar
                         DateTime(Date.fromISOString(rec.date[0..8]), TimeOfDay.fromISOString(rec.date[8..$])), 
                         rec.open, rec.high, rec.low, rec.close, rec.volume);
                 return Bar(Date.fromISOString(rec.date), rec.open, rec.high, rec.low, rec.close, rec.volume);
-            case(FileFormat.TradeStation):
+            case(FileFormat.tradeStation):
                 auto fields = stripped.split(",");
                 if(fields.length != 7 && fields.length != 6) throw new Exception(stripped ~ " is not a valid TS format");
                 if(fields.length == 6) //short
@@ -283,6 +289,10 @@ struct Bar
                             TimeOfDay(to!int(rec.time[0..2]), to!int(rec.time[2..$])) // HHmm
                         ), rec.open, rec.high, rec.low, rec.close, rec.volume);
                 }
+            case(FileFormat.guess):
+                auto fileFormat = Bar.guessFileFormat(data);
+                if(fileFormat.isNull) throw new Exception("Unknown input data: " ~ data);
+                return Bar.fromString(data, ff);
         }
     }
 }
