@@ -4,7 +4,7 @@ public import stockd.ta.atr;
 public import stockd.ta.avg;
 public import stockd.ta.bollinger;
 public import stockd.ta.cci;
-public import stockd.ta.currentdayohl;
+public import stockd.ta.curday_ohl;
 public import stockd.ta.ema;
 public import stockd.ta.heikenashi;
 public import stockd.ta.macd;

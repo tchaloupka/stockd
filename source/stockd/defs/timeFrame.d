@@ -18,33 +18,35 @@ enum Origin {minute, hour, day, week}
  */
 struct TimeFrame
 {
+    import std.traits;
+
     private uint _minutes;
 
     /// Gets TF total minutes
-    pure nothrow @property auto totalMinutes() const
+    pure nothrow @property auto totalMinutes() @safe @nogc const
     {
         return _minutes;
     }
 
     /// Gets TF total hours
-    pure nothrow @property auto totalHours() const
+    pure nothrow @property auto totalHours() @safe @nogc const
     {
         return _minutes / 60;
     }
 
     /// Gets TF total days
-    pure nothrow @property auto totalDays() const
+    pure nothrow @property auto totalDays() @safe @nogc const
     {
         return _minutes / (60*24);
     }
 
     /// Gets TF total weeks
-    pure nothrow @property auto totalWeeks() const
+    pure nothrow @property auto totalWeeks() @safe @nogc const
     {
         return _minutes / (60*24*7);
     }
 
-    pure nothrow @property auto origin() const
+    pure nothrow @property auto origin() @safe @nogc const
     {
         if(_minutes >= 60 * 24 * 7) return Origin.week;
         else if(_minutes >= 60 * 24) return Origin.day;
@@ -82,7 +84,7 @@ struct TimeFrame
         return format("W%s", _minutes / (60*24*7));
     }
 
-    pure private uint parse(in string text)
+    pure private static uint parse(in string text) @safe
     {
         assert(text.length >= 2);
 
@@ -101,47 +103,76 @@ struct TimeFrame
             case 'W':
                 return to!int(text[1..$]) * 60 * 24 * 7;
             default:
-                throw new Exception("Invaild format of TimeFrame: " ~ text);
+                assert(0, "Invaild format of TimeFrame: " ~ text);
         }
     }
 
-    pure ref TimeFrame opAssign(in string text)
+    pure TimeFrame opAssign(in string text) @safe
     {
         this._minutes = parse(text);
         return this;
     }
 
-    pure ref TimeFrame opAssign(in uint minutes)
+    pure TimeFrame opAssign(uint minutes) @safe @nogc nothrow
     {
         this._minutes = minutes;
         return this;
     }
 
-    pure ref TimeFrame opAssign(in Duration duration)
+    pure TimeFrame opAssign(Duration duration) @safe @nogc nothrow
     {
-        this._minutes = to!uint(duration.total!"minutes");
+        this._minutes = cast(uint)(duration.total!"minutes");
         return this;
     }
 
-    pure ref TimeFrame opOpAssign(string op)(in int mul)
+    pure TimeFrame opOpAssign(string op)(in int mul) @safe @nogc nothrow
         if(op == "*")
     {
         this._minutes *= mul;
         return this;
     }
 
-    pure bool opEquals(in string text)
+    pure bool opEquals(in string text) @safe const
     {
         return this._minutes == parse(text);
     }
-    pure bool opEquals(in int minutes)
+    pure bool opEquals(int minutes) @safe @nogc const nothrow
     {
         return this._minutes == minutes;
     }
 
-    pure bool opEquals(in Duration duration)
+    pure bool opEquals(Duration duration) @safe @nogc const nothrow
     {
         return this._minutes == duration.total!"minutes";
+    }
+
+    pure bool opEquals(TimeFrame tf) @safe @nogc const nothrow
+    {
+        return this._minutes == tf._minutes;
+    }
+
+    pure int opCmp(T)(auto ref in T other) @safe const
+        if(is(T:int) || is(Unqual!T == TimeFrame) || is(Unqual!T == Duration) || is(T:string))
+    {
+        int min;
+        static if(is(T:int))
+        {
+            min = other;
+        }
+        else static if(is(T == TimeFrame))
+        {
+            min = other._minutes;
+        }
+        else static if(is(T : Duration))
+        {
+            min = cast(int)other.total!"minutes";
+        }
+        else static if(is(T:string)) min = parse(other)._minutes;
+        else assert(0, "Unhandled type");
+
+        if(this._minutes < min) return -1;
+        if(this._minutes == min) return 0;
+        return 1;
     }
 
     /// implicit conversion to uint

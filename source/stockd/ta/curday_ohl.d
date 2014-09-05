@@ -1,4 +1,4 @@
-module stockd.ta.currentdayohl;
+module stockd.ta.curday_ohl;
 
 import std.datetime;
 import stockd.defs.bar;

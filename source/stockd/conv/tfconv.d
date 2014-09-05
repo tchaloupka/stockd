@@ -28,7 +28,7 @@ private struct TimeFrameConv(T) if (isInputRange!T && is(ElementType!T : Bar))
     private Bar[] _buffer;
     private Bar[] _tfGuessBuffer;
     private Bar[] _outBuffer;
-    private TimeFrame _targetTF;
+    private TimeFrame _targetTF = TimeFrame.init;
     private DateTime _lastWaitTime;
     private ubyte _eodHour;
 
@@ -46,11 +46,11 @@ private struct TimeFrameConv(T) if (isInputRange!T && is(ElementType!T : Bar))
         this._input = input;
         this._factor = factor;
 
-        //init TimeFrame
-        _tfGuessBuffer ~= takeOne();
+        //init TimeFrame - //TODO: check more than 2 bars? add input param to set it directly?
+        _tfGuessBuffer ~= takeNext();
         if(!_input.empty)
         {
-            _tfGuessBuffer ~= takeOne();
+            _tfGuessBuffer ~= takeNext();
             _targetTF = TimeFrame(_tfGuessBuffer[1].time - _tfGuessBuffer[0].time) * factor;
         }
 
@@ -82,7 +82,7 @@ private struct TimeFrameConv(T) if (isInputRange!T && is(ElementType!T : Bar))
         //read from input till we have next Bar or input is empty
         while(!_input.empty || !_tfGuessBuffer.empty)
         {
-            auto next = takeOne();
+            auto next = takeNext();
             auto waitTime = nextValidTime(next);
 
             if (next.time > _lastWaitTime)
@@ -130,7 +130,7 @@ private struct TimeFrameConv(T) if (isInputRange!T && is(ElementType!T : Bar))
         }
     }
 
-    private auto ref takeOne()
+    private auto ref takeNext()
     {
         assert(_input.empty == false || _tfGuessBuffer.empty == false);
 
@@ -138,12 +138,12 @@ private struct TimeFrameConv(T) if (isInputRange!T && is(ElementType!T : Bar))
         {
             //first return from TF guess buffer
             auto next = _tfGuessBuffer.front;
-            _tfGuessBuffer.popFront();
+            _tfGuessBuffer.popFront;
             return next;
         }
 
         auto res = _input.front;
-        _input.popFront();
+        _input.popFront;
 
         return res;
     }
@@ -155,7 +155,7 @@ private struct TimeFrameConv(T) if (isInputRange!T && is(ElementType!T : Bar))
         {
             case Origin.minute:
                 uint rest = bar.time.minute % _factor;
-                if(rest == 0) return bar.time;
+                if(rest == 0) return bar.time;// + dur!"minutes"(_factor);
                 else return bar.time + dur!"minutes"(_factor - rest);
             case Origin.hour:
                 auto next = bar.time;
@@ -199,6 +199,51 @@ private struct TimeFrameConv(T) if (isInputRange!T && is(ElementType!T : Bar))
     }
 }
 
+auto guessTimeFrame(R)(in R data)
+    if(isInputRange!R && is(ElementType!R : Bar))
+{
+    assert(!data.empty);
+
+    ElementType!R last = data.front;
+    auto res = TimeFrame.init;
+    foreach(b; data)
+    {
+        auto diff = b.time - last.time;
+        if(diff > TimeFrame.init && (res == 0 || res > diff))
+           res = diff;
+
+        last = b;
+    }
+    return res;
+}
+
+//guessTimeFrame
+unittest
+{
+    auto data = readBars(
+        r"20110715 205500;1.41540;1.41545;1.41491;1.41498;33450
+        20110715 210000;1.41500;1.41561;1.41473;1.41532;73360"
+        ).array;
+    assert(guessTimeFrame(data) == 5);
+
+    data = readBars(
+        r"20110715 205500;1.41540;1.41545;1.41491;1.41498;33450
+        20110715 205500;1.41500;1.41561;1.41473;1.41532;73360"
+        ).array;
+    assert(guessTimeFrame(data) == TimeFrame.init);
+
+    data = readBars(
+        r"20110715 205500;1.41540;1.41545;1.41491;1.41498;33450"
+        ).array;
+    assert(guessTimeFrame(data) == TimeFrame.init);
+
+    data = readBars(
+        r"20110715 205500;1.41540;1.41545;1.41491;1.41498;33450
+        20110715 215500;1.41500;1.41561;1.41473;1.41532;73360"
+        ).array;
+    assert(guessTimeFrame(data) == 60);
+}
+
 unittest
 {
     import std.algorithm;
@@ -221,8 +266,8 @@ unittest
     int i;
     foreach(b; bars)
     {
-        writefln("%s -> %s", i, b);
-        writefln("%s -> %s expected", i, expected[i]);
+//        writefln("%s -> %s", i, b);
+//        writefln("%s -> %s expected", i, expected[i]);
         assert(expected[i++] == b);
     }
     assert(i == 2);
@@ -238,8 +283,8 @@ unittest
     i = 0;
     foreach(b; bars)
     {
-        writefln("%s -> %s", i, b);
-        writefln("%s -> %s expected", i, expected[i]);
+//        writefln("%s -> %s", i, b);
+//        writefln("%s -> %s expected", i, expected[i]);
         assert(expected[i++] == b);
     }
     assert(i == 2);
