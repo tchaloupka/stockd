@@ -1,10 +1,5 @@
 module stockd.defs.timeFrame;
 
-import std.conv;
-import std.stdio;
-import std.string;
-import core.time;
-
 enum Origin {minute, hour, day, week}
 
 /**
@@ -19,6 +14,7 @@ enum Origin {minute, hour, day, week}
 struct TimeFrame
 {
     import std.traits;
+    import core.time;
 
     private uint _minutes;
 
@@ -54,74 +50,49 @@ struct TimeFrame
         return Origin.minute;
     }
 
-    pure invariant()
+    pure @safe @nogc nothrow const invariant()
     {
         if(_minutes >= 60 * 24 * 7) assert(_minutes % (60 * 24 * 7) == 0);  //Wx
         else if(_minutes >= 60 * 24) assert(_minutes % (60 * 24) == 0);   // Dx
         else if(_minutes >= 60 ) assert(_minutes % 60 == 0);  // Hx
     }
 
-    pure nothrow this(uint minutes)
+    pure @safe @nogc nothrow this(uint minutes)
     {
         this._minutes = minutes;
     }
 
-    pure this(string minutes)
+    pure @safe @nogc nothrow this(Duration duration)
     {
-        this._minutes = parse(minutes);
-    }
-
-    pure this(Duration duration)
-    {
-        this._minutes = to!uint(duration.total!"minutes");
+        this._minutes = cast(uint)(duration.total!"minutes");
     }
 
     pure toString() const
     {
+        import std.string;
+
         if(_minutes < 60) return format("M%s", _minutes);
         if(_minutes < 60 * 24) return format("H%s", _minutes / 60);
         if(_minutes < 60 * 24 * 7) return format("D%s", _minutes / (60*24));
         return format("W%s", _minutes / (60*24*7));
     }
 
-    pure private static uint parse(in string text) @safe
+    pure TimeFrame opAssign(T)(auto ref in T rhs) @safe @nogc nothrow
+        if(is(T:uint) || is(Unqual!T == Duration) || is(Unqual!T == TimeFrame))
     {
-        assert(text.length >= 2);
-
-        switch(text[0])
+        static if(is(Unqual!T == Duration))
         {
-            case 'm':
-            case 'M':
-                return to!int(text[1..$]);
-            case 'h':
-            case 'H':
-                return to!int(text[1..$]) * 60;
-            case 'd':
-            case 'D':
-                return to!int(text[1..$]) * 60 * 24;
-            case 'w':
-            case 'W':
-                return to!int(text[1..$]) * 60 * 24 * 7;
-            default:
-                assert(0, "Invaild format of TimeFrame: " ~ text);
+            this._minutes = cast(uint)(rhs.total!"minutes");
         }
-    }
+        else static if(is(Unqual!T == TimeFrame))
+        {
+            this._minutes = rhs._minutes;
+        }
+        else static if(is(T:uint))
+        {
+            this._minutes = rhs;
+        }
 
-    pure TimeFrame opAssign(in string text) @safe
-    {
-        this._minutes = parse(text);
-        return this;
-    }
-
-    pure TimeFrame opAssign(uint minutes) @safe @nogc nothrow
-    {
-        this._minutes = minutes;
-        return this;
-    }
-
-    pure TimeFrame opAssign(Duration duration) @safe @nogc nothrow
-    {
-        this._minutes = cast(uint)(duration.total!"minutes");
         return this;
     }
 
@@ -132,34 +103,21 @@ struct TimeFrame
         return this;
     }
 
-    pure bool opEquals(in string text) @safe const
+    pure bool opEquals(T)(auto ref in T rhs) @safe @nogc nothrow const
+        if(is(T : int) || is(Unqual!T == Duration) || is(Unqual!T == TimeFrame))
     {
-        return this._minutes == parse(text);
-    }
-    pure bool opEquals(int minutes) @safe @nogc const nothrow
-    {
-        return this._minutes == minutes;
+        static if(is(Unqual!T == Duration)) return this._minutes == rhs.total!"minutes";
+        else static if(is(Unqual!T == TimeFrame)) return this._minutes == rhs._minutes;
+        else static if(is(Unqual!T:int)) return this._minutes == rhs;
+
+        assert(0, "Not implemented type");
     }
 
-    pure bool opEquals(Duration duration) @safe @nogc const nothrow
-    {
-        return this._minutes == duration.total!"minutes";
-    }
-
-    pure bool opEquals(TimeFrame tf) @safe @nogc const nothrow
-    {
-        return this._minutes == tf._minutes;
-    }
-
-    pure int opCmp(T)(auto ref in T other) @safe const
-        if(is(T:int) || is(Unqual!T == TimeFrame) || is(Unqual!T == Duration) || is(T:string))
+    pure int opCmp(T)(auto ref in T other) @safe @nogc nothrow const
+        if(is(T:int) || is(Unqual!T == TimeFrame) || is(Unqual!T == Duration))
     {
         int min;
-        static if(is(T:int))
-        {
-            min = other;
-        }
-        else static if(is(T == TimeFrame))
+        static if(is(T == TimeFrame))
         {
             min = other._minutes;
         }
@@ -167,8 +125,11 @@ struct TimeFrame
         {
             min = cast(int)other.total!"minutes";
         }
-        else static if(is(T:string)) min = parse(other)._minutes;
-        else assert(0, "Unhandled type");
+        else static if(is(T:int))
+        {
+            min = other;
+        }
+        else assert(0, "Not implemented type");
 
         if(this._minutes < min) return -1;
         if(this._minutes == min) return 0;
@@ -179,27 +140,93 @@ struct TimeFrame
     alias totalMinutes this;
 }
 
+/**
+ * Helper function to create TimeFrame struct.
+ */
+pure nothrow @nogc @safe auto timeFrame(string origin)(uint value)
+    if(origin == "m" || origin == "h" || origin == "d" || origin == "w" ||
+       origin == "M" || origin == "H" || origin == "D" || origin == "W" ||
+       origin == "minute" || origin == "hour" || origin == "day" || origin == "week")
+{
+    final switch(origin)
+    {
+        case "m", "M", "minute": return TimeFrame(value);
+        case "h", "H", "hour": return TimeFrame(value * 60);
+        case "d", "D", "day": return TimeFrame(value * 60 * 24);
+        case "w", "W", "week": return TimeFrame(value * 60 * 24 * 7);
+    }
+}
+
+import std.range;
+import stockd.defs.bar;
+
+auto guessTimeFrame(R)(in R data)
+    if(isInputRange!R && is(ElementType!R : Bar))
+{
+    assert(!data.empty);
+    
+    ElementType!R last = data.front;
+    auto res = TimeFrame.init;
+    foreach(b; data)
+    {
+        auto diff = b.time - last.time;
+        if(diff > TimeFrame.init && (res == 0 || res > diff))
+            res = diff;
+        
+        last = b;
+    }
+    return res;
+}
+
+//guessTimeFrame
+unittest
+{
+    auto data = readBars(
+        r"20110715 205500;1.41540;1.41545;1.41491;1.41498;33450
+        20110715 210000;1.41500;1.41561;1.41473;1.41532;73360"
+        ).array;
+    assert(guessTimeFrame(data) == 5);
+    
+    data = readBars(
+        r"20110715 205500;1.41540;1.41545;1.41491;1.41498;33450
+        20110715 205500;1.41500;1.41561;1.41473;1.41532;73360"
+        ).array;
+    assert(guessTimeFrame(data) == TimeFrame.init);
+    
+    data = readBars(
+        r"20110715 205500;1.41540;1.41545;1.41491;1.41498;33450"
+        ).array;
+    assert(guessTimeFrame(data) == TimeFrame.init);
+    
+    data = readBars(
+        r"20110715 205500;1.41540;1.41545;1.41491;1.41498;33450
+        20110715 215500;1.41500;1.41561;1.41473;1.41532;73360"
+        ).array;
+    assert(guessTimeFrame(data) == 60);
+}
+
 unittest
 {
     import core.exception;
     import std.exception;
+    import core.time;
 
     assert(TimeFrame(5) == 5);
     assert(TimeFrame(60) == 60);
     assertThrown!AssertError(TimeFrame(61));
 
-    assert(TimeFrame(5) == "M5");
-    assert(TimeFrame(60) == "H1");
-    assert(TimeFrame(60*24) == "D1");
-    assert(TimeFrame(60*48) == "D2");
-    assert(TimeFrame(60*24*7) == "W1");
+    assert(TimeFrame(5) == 5);
+    assert(TimeFrame(60) == 60);
+    assert(TimeFrame(60*24) == timeFrame!"day"(1));
+    assert(TimeFrame(60*48) == timeFrame!"day"(2));
+    assert(TimeFrame(60*24*7) == timeFrame!"week"(1));
 
-    TimeFrame tf = "M1";
+    TimeFrame tf = 1;
     assert(tf == 1);
-    assert((tf = "M5") == 5);
+    assert((tf = timeFrame!"m"(5)) == 5);
 
     assert(tf == dur!"minutes"(5));
-    assert((tf = "H5") == dur!"hours"(5));
+    assert((tf = timeFrame!"h"(5)) == dur!"hours"(5));
 
     assert((tf = dur!"minutes"(5)) == 5);
 
@@ -214,4 +241,9 @@ unittest
     assertThrown!AssertError(tf *= -100);
 
     assert(TimeFrame(5) > TimeFrame(1));
+
+    assert(timeFrame!"m"(10) == 10);
+    assert(timeFrame!"H"(5) == 5 * 60);
+    assert(timeFrame!"day"(2) == 2 * 60 * 24);
+    assert(timeFrame!"week"(2) == 2 * 60 * 24 * 7);
 }

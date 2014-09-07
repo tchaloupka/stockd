@@ -1,11 +1,6 @@
 module stockd.conv.tfconv;
 
-import std.algorithm;
-import std.datetime;
-import std.exception;
-import std.stdio;
 import std.range;
-
 import stockd.defs;
 
 /**
@@ -23,10 +18,13 @@ template tfConv(uint factor)
 
 private struct TimeFrameConv(T) if (isInputRange!T && is(ElementType!T : Bar))
 {
-    private T _input;
+    import std.datetime;
+
+    enum guessNumBar = 10;
+
+    private InputRange!(ElementType!T) _input;
     private uint _factor;
     private Bar[] _buffer;
-    private Bar[] _tfGuessBuffer;
     private Bar[] _outBuffer;
     private TimeFrame _targetTF = TimeFrame.init;
     private DateTime _lastWaitTime;
@@ -40,22 +38,33 @@ private struct TimeFrameConv(T) if (isInputRange!T && is(ElementType!T : Bar))
      */
     this(T input, uint factor, ubyte eodHour = 22)  //TODO: check if differ in summer and winter times - than session object should be passed (it would be more generic)
     {
+        import std.array;
+        import std.range;
+        import std.exception : enforce;
+
         enforce(input.empty == false);
         enforce(factor > 0);
 
-        this._input = input;
         this._factor = factor;
 
-        //init TimeFrame - //TODO: check more than 2 bars? add input param to set it directly?
-        _tfGuessBuffer ~= takeNext();
-        if(!_input.empty)
+        auto tfGuessArray = input.take(guessNumBar).array();
+        if(tfGuessArray.length<2) assert(false, "Not enough input bars");
+
+        _targetTF = guessTimeFrame(tfGuessArray) * factor;
+
+        static if(is(T == class) || is(T == interface))
         {
-            _tfGuessBuffer ~= takeNext();
-            _targetTF = TimeFrame(_tfGuessBuffer[1].time - _tfGuessBuffer[0].time) * factor;
+            //as part of input range was consumed for TF guessing, chain guess buffer with the input range
+            _input = inputRangeObject(chain(tfGuessArray, input));
+        }
+        else static if(is(T == struct) || is(T == union))
+        {
+            //just use the input range
+            _input = inputRangeObject(input);
         }
 
         //prepare next Bar
-        popFront();
+        this.popFront();
     }
 
     @property bool empty()
@@ -80,7 +89,7 @@ private struct TimeFrameConv(T) if (isInputRange!T && is(ElementType!T : Bar))
         else _outBuffer = null;
 
         //read from input till we have next Bar or input is empty
-        while(!_input.empty || !_tfGuessBuffer.empty)
+        while(!_input.empty)
         {
             auto next = takeNext();
             auto waitTime = nextValidTime(next);
@@ -132,15 +141,7 @@ private struct TimeFrameConv(T) if (isInputRange!T && is(ElementType!T : Bar))
 
     private auto ref takeNext()
     {
-        assert(_input.empty == false || _tfGuessBuffer.empty == false);
-
-        if(_tfGuessBuffer.length > 0 && _targetTF != TimeFrame.init)
-        {
-            //first return from TF guess buffer
-            auto next = _tfGuessBuffer.front;
-            _tfGuessBuffer.popFront;
-            return next;
-        }
+        assert(_input.empty == false);
 
         auto res = _input.front;
         _input.popFront;
@@ -199,55 +200,11 @@ private struct TimeFrameConv(T) if (isInputRange!T && is(ElementType!T : Bar))
     }
 }
 
-auto guessTimeFrame(R)(in R data)
-    if(isInputRange!R && is(ElementType!R : Bar))
-{
-    assert(!data.empty);
-
-    ElementType!R last = data.front;
-    auto res = TimeFrame.init;
-    foreach(b; data)
-    {
-        auto diff = b.time - last.time;
-        if(diff > TimeFrame.init && (res == 0 || res > diff))
-           res = diff;
-
-        last = b;
-    }
-    return res;
-}
-
-//guessTimeFrame
-unittest
-{
-    auto data = readBars(
-        r"20110715 205500;1.41540;1.41545;1.41491;1.41498;33450
-        20110715 210000;1.41500;1.41561;1.41473;1.41532;73360"
-        ).array;
-    assert(guessTimeFrame(data) == 5);
-
-    data = readBars(
-        r"20110715 205500;1.41540;1.41545;1.41491;1.41498;33450
-        20110715 205500;1.41500;1.41561;1.41473;1.41532;73360"
-        ).array;
-    assert(guessTimeFrame(data) == TimeFrame.init);
-
-    data = readBars(
-        r"20110715 205500;1.41540;1.41545;1.41491;1.41498;33450"
-        ).array;
-    assert(guessTimeFrame(data) == TimeFrame.init);
-
-    data = readBars(
-        r"20110715 205500;1.41540;1.41545;1.41491;1.41498;33450
-        20110715 215500;1.41500;1.41561;1.41473;1.41532;73360"
-        ).array;
-    assert(guessTimeFrame(data) == 60);
-}
-
 unittest
 {
     import std.algorithm;
     import std.conv;
+    import std.stdio;
 
     // Test M1 to M5
     string barsText = r"20110715 205500;1.4154;1.41545;1.41491;1.41498;33450
@@ -266,8 +223,6 @@ unittest
     int i;
     foreach(b; bars)
     {
-//        writefln("%s -> %s", i, b);
-//        writefln("%s -> %s expected", i, expected[i]);
         assert(expected[i++] == b);
     }
     assert(i == 2);
@@ -283,8 +238,6 @@ unittest
     i = 0;
     foreach(b; bars)
     {
-//        writefln("%s -> %s", i, b);
-//        writefln("%s -> %s expected", i, expected[i]);
         assert(expected[i++] == b);
     }
     assert(i == 2);
