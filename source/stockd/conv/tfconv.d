@@ -24,9 +24,8 @@ private struct TimeFrameConv(T) if (isInputRange!T && is(ElementType!T : Bar))
 
     private InputRange!(ElementType!T) _input;
     private uint _factor;
-    private Bar[] _buffer;
-    private Bar[] _outBuffer;
-    private TimeFrame _targetTF = TimeFrame.init;
+    private Bar currentBar;
+    private TimeFrame _targetTF;
     private DateTime _lastWaitTime;
     private ubyte _eodHour;
 
@@ -69,88 +68,61 @@ private struct TimeFrameConv(T) if (isInputRange!T && is(ElementType!T : Bar))
 
     @property bool empty()
     {
-        return _outBuffer.empty;
+        return currentBar == Bar.init;
     }
 
     @property auto ref front()
     {
-        assert(!_outBuffer.empty);
+        assert(currentBar != Bar.init);
 
-        return _outBuffer[0];
+        return currentBar;
     }
 
     void popFront()
     {
-        if(_outBuffer.length > 1) 
-        {
-            _outBuffer.popFront();
-            return;
-        }
-        else _outBuffer = null;
+        currentBar = Bar.init;
 
-        //read from input till we have next Bar or input is empty
         while(!_input.empty)
         {
-            auto next = takeNext();
-            auto waitTime = nextValidTime(next);
-
-            if (next.time > _lastWaitTime)
+            if(_input.front.time <= _lastWaitTime) //reading through to valid time
             {
+                //just add to current
+                currentBar ~= _input.front;
+                _input.popFront();
+
+                if(currentBar.time == _lastWaitTime) break; //we've got one
+            }
+            else if(_input.front.time > _lastWaitTime) //new bar started
+            {
+                auto waitTime = nextValidTime(_input.front);
+
                 assert(_lastWaitTime < waitTime);
 
-                //add one from buffer if there are some bars waiting
-                if(_buffer.length > 0) _outBuffer ~= createBarFromBuffer();
-
-                if (next.time == waitTime)
+                if(currentBar == Bar.init) //this means that we just got the first Bar from the input
                 {
-                    //just return this one
-                    _outBuffer ~= next;
+                    _lastWaitTime = waitTime; //just set the new time and go on
                 }
-                else _buffer ~= next; //add to buffer and wait for next
-            }
-            else
-            {
-                assert(_lastWaitTime == waitTime);
-
-                //add to buffer
-                _buffer ~= next;
-
-                if(next.time == _lastWaitTime)
+                else
                 {
-                    //we've got next with exact time! => create output bar and clear buffer
-                    _outBuffer ~= createBarFromBuffer();
+                    //return current one even if it's not complete
+                    currentBar.time = _lastWaitTime; //at least set the correct time
+                    _lastWaitTime = waitTime;
+                    break;
                 }
             }
-            
-            _lastWaitTime = waitTime;
-            //filter out weekend bars from input
-            //TODO: not sure if this should be here at all -> input validation in marketData range?
-            if (_targetTF.origin == Origin.day && _factor == 1 && _outBuffer.length > 0)
-            {
-                _outBuffer = _outBuffer.filter!(b => b.time.dayOfWeek != DayOfWeek.sun && b.time.dayOfWeek != DayOfWeek.sat).array;
-            }
-            if(_outBuffer.length > 0) break; //we have the next bar
         }
 
-        if(_outBuffer.length == 0 && _buffer.length > 0)
+        //filter out weekend bars from input
+        //TODO: not sure if this should be here at all -> input validation in marketData range?
+        if(_targetTF.origin == Origin.day && _factor == 1 && (currentBar.time.dayOfWeek == DayOfWeek.sun || currentBar.time.dayOfWeek == DayOfWeek.sat))
         {
-            //return last bars from buffer
-            _outBuffer ~= createBarFromBuffer();
+            //ignore this one and get next
+            popFront();
         }
-    }
-
-    private auto ref takeNext()
-    {
-        assert(_input.empty == false);
-
-        auto res = _input.front;
-        _input.popFront;
-
-        return res;
     }
 
     /// gets next time we wait for from the current bar
-    private DateTime nextValidTime(ref Bar bar)
+    private DateTime nextValidTime(Bar bar)
     {
         final switch(_targetTF.origin)
         {
@@ -186,18 +158,6 @@ private struct TimeFrameConv(T) if (isInputRange!T && is(ElementType!T : Bar))
                 return bar.time;
         }
     }
-
-    auto createBarFromBuffer()
-    {
-        scope(exit)
-        {
-            //clear buffer
-            _buffer = null;
-        }
-
-        if(_targetTF.origin >= Origin.day) return createBar!(Date)(_buffer, _lastWaitTime.date);
-        else return createBar!(DateTime)(_buffer, _lastWaitTime);
-    }
 }
 
 unittest
@@ -223,6 +183,8 @@ unittest
     int i;
     foreach(b; bars)
     {
+//        writeln(b);
+//        writeln(expected[i], " - expected");
         assert(expected[i++] == b);
     }
     assert(i == 2);

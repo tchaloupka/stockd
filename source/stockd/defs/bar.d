@@ -317,6 +317,12 @@ struct Bar
 
     pure void opOpAssign(string op : "~")(in Bar rhs) @safe @nogc
     {
+        if(this == Bar.init)
+        {
+            this = rhs;
+            return;
+        }
+
         this.time = rhs.time;
         this._volume += rhs.volume;
         if(this.high < rhs.high) this._high = rhs.high;
@@ -407,5 +413,10 @@ unittest
 
     b = bars[0];
     b ~= bars[1..$];
+    assert(b == expected);
+
+    b = Bar.init;
+    b ~= expected;
+
     assert(b == expected);
 }
