@@ -41,32 +41,24 @@ private struct TimeFrameConv(T) if (isInputRange!T && is(ElementType!T : Bar))
         import std.range;
         import std.exception : enforce;
 
-        enforce(input.empty == false);
+        enforce(!input.empty);
         enforce(factor > 0);
 
         this._factor = factor;
 
-        auto tfGuessArray = input.take(guessNumBar).array();
-        if(tfGuessArray.length<2) assert(false, "Not enough input bars");
+        auto tfGuessArray = take(&input, guessNumBar).array();
+        if(tfGuessArray.length<2) assert(0, "Not enough input bars");
 
         _targetTF = guessTimeFrame(tfGuessArray) * factor;
 
-        static if(is(T == class) || is(T == interface))
-        {
-            //as part of input range was consumed for TF guessing, chain guess buffer with the input range
-            _input = inputRangeObject(chain(tfGuessArray, input));
-        }
-        else static if(is(T == struct) || is(T == union))
-        {
-            //just use the input range
-            _input = inputRangeObject(input);
-        }
+        //as part of input range was consumed for TF guessing, chain guess buffer with the input range
+        _input = inputRangeObject(chain(tfGuessArray, input));
 
-        //prepare next Bar
+        //prepare first Bar
         this.popFront();
     }
 
-    @property bool empty()
+    @property @safe @nogc nothrow bool empty() const
     {
         return currentBar == Bar.init;
     }
@@ -80,6 +72,8 @@ private struct TimeFrameConv(T) if (isInputRange!T && is(ElementType!T : Bar))
 
     void popFront()
     {
+        assert(!empty || !_input.empty);
+
         currentBar = Bar.init;
 
         while(!_input.empty)
@@ -165,6 +159,9 @@ unittest
     import std.algorithm;
     import std.conv;
     import std.stdio;
+    import std.range;
+
+    import stockd.data;
 
     // Test M1 to M5
     string barsText = r"20110715 205500;1.4154;1.41545;1.41491;1.41498;33450
@@ -174,10 +171,10 @@ unittest
         20110715 205900;1.41489;1.41561;1.41486;1.41561;15280
         20110715 210000;1.41549;1.41549;1.41532;1.41532;540";
 
-    auto expected = readBars("20110715 205500;1.41540;1.41545;1.41491;1.41498;33450\n"
+    auto expected = marketData("20110715 205500;1.41540;1.41545;1.41491;1.41498;33450\n"
         ~"20110715 210000;1.41500;1.41561;1.41473;1.41532;73360").array;
-
-    auto bars = readBars(barsText).tfConv!(5);
+                               
+    auto bars = marketData(barsText).tfConv!(5);
 
     writeln("Test M1 -> M5");
     int i;
@@ -193,8 +190,7 @@ unittest
     barsText = "20110715 205500;1.4154;1.41545;1.41491;1.41498;33450\n"
         ~ "20110715 210000;1.415;1.41561;1.41473;1.41532;73360";
     
-    //auto bars = barsText.splitter('\n').map!(b => Bar.fromString(b));
-    bars = readBars(barsText).tfConv!(1);
+    bars = marketData(barsText).tfConv!(1);
 
     writeln("Test M5 -> M5");
     i = 0;

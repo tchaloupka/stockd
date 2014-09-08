@@ -181,24 +181,26 @@ auto guessTimeFrame(R)(in R data)
 //guessTimeFrame
 unittest
 {
-    auto data = readBars(
+    import stockd.data;
+
+    auto data = marketData(
         r"20110715 205500;1.41540;1.41545;1.41491;1.41498;33450
         20110715 210000;1.41500;1.41561;1.41473;1.41532;73360"
         ).array;
     assert(guessTimeFrame(data) == 5);
     
-    data = readBars(
+    data = marketData(
         r"20110715 205500;1.41540;1.41545;1.41491;1.41498;33450
         20110715 205500;1.41500;1.41561;1.41473;1.41532;73360"
         ).array;
     assert(guessTimeFrame(data) == TimeFrame.init);
     
-    data = readBars(
+    data = marketData(
         r"20110715 205500;1.41540;1.41545;1.41491;1.41498;33450"
         ).array;
     assert(guessTimeFrame(data) == TimeFrame.init);
     
-    data = readBars(
+    data = marketData(
         r"20110715 205500;1.41540;1.41545;1.41491;1.41498;33450
         20110715 215500;1.41500;1.41561;1.41473;1.41532;73360"
         ).array;

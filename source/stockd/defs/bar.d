@@ -6,42 +6,6 @@ import std.datetime;
 enum FileFormat {ninjaTrader, tradeStation, guess}
 
 /**
- * Template whitch helps create Bar from Bar array
- */
-template createBar(T) 
-    if(is(T==DateTime) || is(T == Date))
-{
-    Bar createBar(T)(in Bar[] bars, T time)
-    {
-        import std.algorithm;
-
-        assert(bars.length > 0);
-        
-        auto r = reduce!(
-            (a,b) => a > b.low ? b.low : a, // get min low
-            (a,b) => a < b.high ? b.high : a, // get max high
-            (a,b) => a + b.volume)  // sum volume
-            (tuple(cast(double)int.max, 0.0, cast(size_t)0), bars);
-        
-        return Bar(time, bars[0].open, r[1], r[0], bars[$-1].close, r[2]);
-    }
-}
-
-/// Template which reads Bars from multiline string
-/// 
-/// Returns:
-/// input range of Bars
-template readBars()
-{
-    auto readBars(string data, FileFormat ff = FileFormat.ninjaTrader)
-    {
-        import std.algorithm;
-
-        return data.splitter('\n').map!(b => Bar(b, ff));
-    }
-}
-
-/**
  * Defines BAR structure
  */
 struct Bar
@@ -344,6 +308,7 @@ unittest
     import std.conv;
     import std.array;
     import std.stdio;
+    import stockd.data;
 
     //Test NT format output
     Bar b = Bar(DateTime(2010, 3, 2, 5, 6, 7), 58.678654, 58.825467, 57.033158, 57.7313214, 100);
@@ -404,7 +369,7 @@ unittest
         20110715 210000;1.41549;1.41549;1.41532;1.41532;540";
     auto expected = Bar("20110715 210000;1.41500;1.41561;1.41473;1.41532;73360");
 
-    auto bars = readBars(barsText).array;
+    auto bars = marketData(barsText).array;
     b = bars[0];
     foreach(bar; bars[1..$])
         b ~= bar;

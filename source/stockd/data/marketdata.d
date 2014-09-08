@@ -1,41 +1,72 @@
 module stockd.data.marketdata;
 
-import std.algorithm;
 import std.stdio;
 import std.range;
-import std.traits;
-
 import stockd.defs;
+import S = stockd.data.symbol;
 
 /**
  * Helper function to create MarketData range
  */
-auto marketData(T)(T input, in string symbol)
-    if(is(T == File) || is(isSomeString!T) || (isInputRange!T && is(isSomeString!(ElementType!T))))
+auto marketData(T)(T input, in S.Symbol symbol = S.Symbol.init, TimeFrame tf = TimeFrame.init)
+    if(isSomeString!T || is(T == File) || (isInputRange!T && (isSomeString!(ElementType!T) || is(ElementType!T == Bar))))
 {
-    return MarketData!T(input, symbol);
+    import std.typecons;
+
+    static if(isInputRange!T && is(ElementType!T == Bar))
+    {
+        //just return struct
+        return MarketData!T(input, symbol, tf);
+    }
+    else
+    {
+        static if(is(T == File))
+        {
+            //make input range from file
+            auto _input = input.byLine();
+        }
+        else static if(isSomeString!T)
+        {
+            //read input by lines
+            import std.algorithm;
+
+            auto _input = input.splitter('\n');
+        }
+
+        //guess input format
+        Nullable!FileFormat ff;
+        while((ff = Bar.guessFileFormat(_input.front)).isNull)
+        {
+            _input.popFront();
+        }
+        
+        import std.algorithm;
+        
+        return marketData(_input.map!(a => Bar(a, ff)), symbol, tf);
+    }
 }
 
 /**
  * This class works as an input range of BARs
  * 
- * It accepts file, string and inputRange!string as an input.
- * 
  * It reads input line by line and tries to construct Bar struct from it. It validates input so invalid bars are ignored.
  * When initialized, it can guess source TF (from first bars) and check forthcomming to be within the same range
  * 
  * TODO: when done, remove readBars template with this
- * TODO: change to struct
  */
 struct MarketData(T) 
-    if(is(T == File) || is(isSomeString!T) || (isInputRange!T && is(isSomeString!(ElementType!T))))
+    if(isInputRange!T && is(ElementType!T == Bar))
 {
-    private File.ByLine!(char, char) _input;
-    private Bar _current;
-    private Bar[] _tfGuessBuffer;
-    private string _symbol;
+    enum guessNumBar = 10;
+    
+    private InputRange!(Bar) _input;
+    private S.Symbol _symbol;
     private TimeFrame _timeFrame;
-    private FileFormat _fileFormat = FileFormat.guess;
+
+    @property @safe @nogc pure nothrow public auto Symbol() const
+    {
+        return _symbol;
+    }
 
     @property @safe @nogc pure nothrow auto timeFrame() const
     {
@@ -45,29 +76,33 @@ struct MarketData(T)
     @disable this();
 
     /// Constructor for file input
-    this(T input, in string symbol)
+    this(T input, in S.Symbol symbol = S.Symbol.init, TimeFrame tf = TimeFrame.init)
     {
-        static if(is(T == File))
+        import std.array;
+        import std.range;
+        import std.exception : enforce;
+
+        enforce(input.empty == false);
+
+        if(tf == TimeFrame.init)
         {
-            //make input range from file
-            //_input = inputRangeObject(input.byLine().map!(a=>cast(string)a));
-            _input = input.byLine();
-        }
-        else if(isSomeString!T)
-        {
-            //make input range from string
-            _input = input.splitLines();
+            //guess time frame from input
+            auto tfGuessArray = take(&input, guessNumBar).array();
+            _timeFrame = guessTimeFrame(tfGuessArray);
+            
+            //as part of input range was consumed for TF guessing, chain guess buffer with the input range
+            _input = inputRangeObject(chain(tfGuessArray, input));
         }
         else
         {
-            //just use the input
-            this._input = input;
+            this._timeFrame = tf;
+            _input = inputRangeObject(input);
         }
+
         this._symbol = symbol;
-        popFront();
     }
 
-    @property bool empty() @safe
+    @property bool empty()
     {
         return _input.empty;
     }
@@ -76,52 +111,37 @@ struct MarketData(T)
     {
         assert(!_input.empty);
         
-        return _current;
+        return _input.front;
     }
     
     void popFront()
     {
-        assert(false, "not implemented yet");
-    }
-
-    private auto takeOne()
-    {
-        assert(_input.empty == false || _tfGuessBuffer.empty == false);
-        
-        if(_tfGuessBuffer.length > 0 && _timeFrame != TimeFrame.init)
-        {
-            //first return from TF guess buffer
-            auto next = _tfGuessBuffer.moveFront;
-            return next;
-        }
-        
-        auto res = _input.moveFront;
-
-        if(_fileFormat == FileFormat.guess)
-        {
-            //not yet known file format - so guess it from input data
-            for(uint tries = 3; tries>0; --tries)
-            {
-                //this skips also the possible CSV header - ok with me, guessing should work ok without it (at least in my usecases)
-                auto ff = Bar.guessFileFormat(res);
-                if(!ff.isNull)
-                {
-                    _fileFormat = ff;
-                    break;
-                }
-                if(!_input.empty) //read next line
-                {
-                    res = _input.moveFront;
-                }
-            }
-            if(_fileFormat == FileFormat.guess) throw new Exception("Cannot determine input data format");
-        }
-        
-        return Bar(cast(string)res, _fileFormat);
+        assert(!empty);
+        _input.popFront();
     }
 }
 
 unittest
 {
+    import std.array;
 
+    string barsText = r"20110715 205500;1.4154;1.41545;1.41491;1.41498;33450
+        20110715 205600;1.415;1.4152;1.41481;1.41481;11360
+        20110715 205700;1.41486;1.41522;1.41477;1.41486;31010
+        20110715 205800;1.41488;1.41506;1.41473;1.41502;15170
+        20110715 205900;1.41489;1.41561;1.41486;1.41561;15280
+        20110715 210000;1.41549;1.41549;1.41532;1.41532;540";
+
+    Bar[] expected = [
+        Bar("20110715 205500;1.4154;1.41545;1.41491;1.41498;33450"),
+        Bar("20110715 205600;1.415;1.4152;1.41481;1.41481;11360"),
+        Bar("20110715 205700;1.41486;1.41522;1.41477;1.41486;31010"),
+        Bar("20110715 205800;1.41488;1.41506;1.41473;1.41502;15170"),
+        Bar("20110715 205900;1.41489;1.41561;1.41486;1.41561;15280"),
+        Bar("20110715 210000;1.41549;1.41549;1.41532;1.41532;540")
+    ];
+
+    auto data = marketData(barsText).array;
+
+    assert(data == expected);
 }
