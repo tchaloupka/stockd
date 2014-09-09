@@ -8,15 +8,14 @@ import stockd.defs;
  * 
  * For example can make h1 bars from m1 (hour TF from minute TF)
  */
-template tfConv(uint factor)
+auto tfConv(Range)(Range r, uint factor)
+    if (isInputRange!Range && is(ElementType!Range : Bar))
 {
-    auto tfConv(Range)(Range r) if (isInputRange!Range && is(ElementType!Range : Bar))
-    {
-        return TimeFrameConv!(Range)(r, factor);
-    }
+    return TimeFrameConv!(Range)(r, factor);
 }
 
-private struct TimeFrameConv(T) if (isInputRange!T && is(ElementType!T : Bar))
+private struct TimeFrameConv(T)
+    if (isInputRange!T && is(ElementType!T : Bar))
 {
     import std.datetime;
 
@@ -40,38 +39,57 @@ private struct TimeFrameConv(T) if (isInputRange!T && is(ElementType!T : Bar))
         import std.array;
         import std.range;
         import std.exception : enforce;
+        import std.traits;
 
-        enforce(!input.empty);
         enforce(factor > 0);
+        enforce(!input.empty);
 
         this._factor = factor;
 
-        auto tfGuessArray = take(&input, guessNumBar).array();
-        if(tfGuessArray.length<2) assert(0, "Not enough input bars");
+        //guess time frame from input
+        static if(isArray!T)
+        {
+            _targetTF = guessTimeFrame(input[0..min(guessNumBar, input.length)]) * factor;
+            _input = inputRangeObject(input);
+        }
+        else
+        {
+            auto tfGuessArray = take(&input, guessNumBar).array();
+            _targetTF = guessTimeFrame(tfGuessArray) * factor;
+            
+            //as part of input range was consumed for TF guessing, chain guess buffer with the input range
+            _input = inputRangeObject(chain(tfGuessArray, input));
+        }
 
-        _targetTF = guessTimeFrame(tfGuessArray) * factor;
-
-        //as part of input range was consumed for TF guessing, chain guess buffer with the input range
-        _input = inputRangeObject(chain(tfGuessArray, input));
-
-        //prepare first Bar
-        this.popFront();
+        if(factor != 1)
+        {
+            //prepare first Bar
+            this.popFront();
+        }
     }
 
-    @property @safe @nogc nothrow bool empty() const
+    @property bool empty()
     {
+        if(_factor == 1) return _input.empty;
         return currentBar == Bar.init;
     }
 
     @property auto ref front()
     {
-        assert(currentBar != Bar.init);
+        if(_factor == 1) return _input.front;
 
+        assert(currentBar != Bar.init);
         return currentBar;
     }
 
     void popFront()
     {
+        if(_factor == 1)
+        {
+            _input.popFront();
+            return;
+        }
+
         assert(!empty || !_input.empty);
 
         currentBar = Bar.init;
@@ -174,7 +192,7 @@ unittest
     auto expected = marketData("20110715 205500;1.41540;1.41545;1.41491;1.41498;33450\n"
         ~"20110715 210000;1.41500;1.41561;1.41473;1.41532;73360").array;
                                
-    auto bars = marketData(barsText).tfConv!(5);
+    auto bars = marketData(barsText).tfConv(5);
 
     writeln("Test M1 -> M5");
     int i;
@@ -190,7 +208,7 @@ unittest
     barsText = "20110715 205500;1.4154;1.41545;1.41491;1.41498;33450\n"
         ~ "20110715 210000;1.415;1.41561;1.41473;1.41532;73360";
     
-    bars = marketData(barsText).tfConv!(1);
+    bars = marketData(barsText).tfConv(1);
 
     writeln("Test M5 -> M5");
     i = 0;

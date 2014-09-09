@@ -12,6 +12,7 @@ auto marketData(T)(T input, in S.Symbol symbol = S.Symbol.init, TimeFrame tf = T
     if(isSomeString!T || is(T == File) || (isInputRange!T && (isSomeString!(ElementType!T) || is(ElementType!T == Bar))))
 {
     import std.typecons;
+    import std.algorithm;
 
     static if(isInputRange!T && is(ElementType!T == Bar))
     {
@@ -23,7 +24,7 @@ auto marketData(T)(T input, in S.Symbol symbol = S.Symbol.init, TimeFrame tf = T
         static if(is(T == File))
         {
             //make input range from file
-            auto _input = input.byLine();
+            auto _input = input.byLine().map!"a.idup";
         }
         else static if(isSomeString!T)
         {
@@ -51,8 +52,6 @@ auto marketData(T)(T input, in S.Symbol symbol = S.Symbol.init, TimeFrame tf = T
  * 
  * It reads input line by line and tries to construct Bar struct from it. It validates input so invalid bars are ignored.
  * When initialized, it can guess source TF (from first bars) and check forthcomming to be within the same range
- * 
- * TODO: when done, remove readBars template with this
  */
 struct MarketData(T) 
     if(isInputRange!T && is(ElementType!T == Bar))
@@ -81,17 +80,27 @@ struct MarketData(T)
         import std.array;
         import std.range;
         import std.exception : enforce;
+    	import std.traits;
+    	import std.algorithm;
 
         enforce(input.empty == false);
 
         if(tf == TimeFrame.init)
         {
             //guess time frame from input
-            auto tfGuessArray = take(&input, guessNumBar).array();
-            _timeFrame = guessTimeFrame(tfGuessArray);
+    	    static if(isArray!T)
+    	    {
+    	    	_timeFrame = guessTimeFrame(input[0..min(guessNumBar, input.length)]);
+    	    	_input = inputRangeObject(input);
+    	    }
+    	    else
+    	    {
+            	auto tfGuessArray = take(&input, guessNumBar).array();
+            	_timeFrame = guessTimeFrame(tfGuessArray);
             
-            //as part of input range was consumed for TF guessing, chain guess buffer with the input range
-            _input = inputRangeObject(chain(tfGuessArray, input));
+            	//as part of input range was consumed for TF guessing, chain guess buffer with the input range
+            	_input = inputRangeObject(chain(tfGuessArray, input));
+    	    }
         }
         else
         {
@@ -123,7 +132,12 @@ struct MarketData(T)
 
 unittest
 {
+    import std.range;
     import std.array;
+    import std.traits;
+    import std.stdio;
+
+    assert(isInputRange!(MarketData!(Bar[])));
 
     string barsText = r"20110715 205500;1.4154;1.41545;1.41491;1.41498;33450
         20110715 205600;1.415;1.4152;1.41481;1.41481;11360
@@ -144,4 +158,10 @@ unittest
     auto data = marketData(barsText).array;
 
     assert(data == expected);
+
+    auto data2 = marketData(inputRangeObject(data)).array;
+    assert(data2 == expected);
+
+    auto data3 = marketData(data2).array;
+    assert(data3 == expected);
 }

@@ -25,11 +25,11 @@ struct Bar
 //            * TS format is:
 //            * MM/dd/yyyy,HHMM
 
-    private bool hasTOD;
+    private bool _hasTOD;
     private DateTime _time;
     @property @safe @nogc pure nothrow public DateTime time() const { return _time; }
-    @property @safe @nogc pure nothrow public void time(DateTime value) { _time = value; hasTOD = true; }
-    @property @safe pure nothrow public void time(Date value) { _time = DateTime(value); hasTOD = false; }
+    @property @safe @nogc pure nothrow public void time(DateTime value) { _time = value; _hasTOD = true; }
+    @property @safe pure nothrow public void time(Date value) { _time = DateTime(value); _hasTOD = false; }
 
     mixin property!(double, "open", 0);
     mixin property!(double, "high", 0);
@@ -54,7 +54,7 @@ struct Bar
         this._low = low;
         this._close = close;
         this._volume = volume;
-        this.hasTOD = true;
+        this._hasTOD = true;
     }
 
     /**
@@ -74,7 +74,7 @@ struct Bar
         this._low = low;
         this._close = close;
         this._volume = volume;
-        this.hasTOD = false;
+        this._hasTOD = false;
     }
 
     /**
@@ -194,7 +194,7 @@ struct Bar
             case FileFormat.guess:
                 //fall back to the default FileFormat
             case FileFormat.ninjaTrader:
-                if(hasTOD)
+                if(_hasTOD)
                 {
                     return format("%s %s;%.5f;%.5f;%.5f;%.5f;%d", 
                           time.date.toISOString, time.timeOfDay.toISOString,
@@ -204,7 +204,7 @@ struct Bar
                       time.date.toISOString,
                       _open, _high, _low, _close, _volume);
             case FileFormat.tradeStation:
-                if(hasTOD)
+                if(_hasTOD)
                 {
                     return format("%02d/%02d/%d,%02d%02d,%.5f,%.5f,%.5f,%.5f,%d", 
                                   time.month, time.day, time.year, time.hour, time.minute,
@@ -287,7 +287,10 @@ struct Bar
             return;
         }
 
-        this.time = rhs.time;
+        assert(this._hasTOD == rhs._hasTOD);
+
+        this._time = rhs.time;
+        this._hasTOD = rhs._hasTOD;
         this._volume += rhs.volume;
         if(this.high < rhs.high) this._high = rhs.high;
         if(this.low > rhs.low) this._low = rhs.low;
@@ -339,19 +342,24 @@ unittest
     //Test Bar.fromString
     b = Bar("20100302 050607;58.678654;58.825467;57.033158;57.7313214;100");
     assert(b == Bar(DateTime(2010, 3, 2, 5, 6, 7), 58.678654, 58.825467, 57.033158, 57.7313214, 100));
-    assert(b.hasTOD);
+    assert(b._hasTOD);
     b = Bar("20100302 050607;58.678654;58.825467;57.033158;57.7313214");
     assert(b == Bar(DateTime(2010, 3, 2, 5, 6, 7), 58.678654, 58.825467, 57.033158, 57.7313214, 0));
     b = Bar("20100312;58.678654;58.825467;57.033158;57.7313214;100");
     assert(b == Bar(Date(2010, 3, 12), 58.678654, 58.825467, 57.033158, 57.7313214, 100));
-    assert(!b.hasTOD);
+    assert(!b._hasTOD);
 
     b = Bar("03/02/2010,0506,58.67865,58.82547,57.03316,57.73132,100", FileFormat.tradeStation);
     assert(b == Bar(DateTime(2010, 3, 2, 5, 6, 0), 58.67865, 58.82547, 57.03316, 57.73132, 100));
-    assert(b.hasTOD);
+    assert(b._hasTOD);
     b = Bar("03/02/2010,58.67865,58.82547,57.03316,57.73132,100", FileFormat.tradeStation);
     assert(b == Bar(Date(2010, 3, 2), 58.67865, 58.82547, 57.03316, 57.73132, 100));
-    assert(!b.hasTOD);
+    assert(!b._hasTOD);
+
+    auto b2 = b;
+    b2 ~= b;
+    assert(!b._hasTOD);
+    assert(b2 == Bar("03/02/2010,58.67865,58.82547,57.03316,57.73132,200", FileFormat.tradeStation));
 
     assertThrown(Bar("a;b;c;d;e;f"));
     assertThrown(Bar("a,b,c,d,e,f"));
