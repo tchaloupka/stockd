@@ -304,6 +304,14 @@ struct Bar
     }
 }
 
+/**
+ * Template which defines bar literal
+ */
+template bar(string s)
+{
+    enum bar = Bar(s);
+}
+
 unittest
 {
     import std.exception;
@@ -392,4 +400,7 @@ unittest
     b ~= expected;
 
     assert(b == expected);
+
+    //test bar literal
+    assert(bar!"20110715 210000;1.41500;1.41561;1.41473;1.41532;73360" == expected);
 }
