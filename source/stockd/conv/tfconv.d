@@ -194,7 +194,7 @@ unittest
                                
     auto bars = marketData(barsText).tfConv(5);
 
-    writeln("Test M1 -> M5");
+    //Test M1 -> M5
     int i;
     foreach(b; bars)
     {
@@ -210,7 +210,7 @@ unittest
     
     bars = marketData(barsText).tfConv(1);
 
-    writeln("Test M5 -> M5");
+    //Test M5 -> M5
     i = 0;
     foreach(b; bars)
     {

@@ -1,9 +1,245 @@
 module stockd.defs.bar;
 
-import stockd.defs.templates;
+import stockd.defs.common;
 import std.datetime;
 
 enum FileFormat {ninjaTrader, tradeStation, guess}
+
+pure @safe private auto tryReadBar(FileFormat ff)(in string data, out Bar bar)
+    if(ff != FileFormat.guess)
+{
+    import std.stdio;
+
+    static if(ff == FileFormat.ninjaTrader) enum delimiter = ';';
+    else static if(ff == FileFormat.tradeStation) enum delimiter = ',';
+
+    short year;
+    byte month, day, hour, min, sec;
+    double open, high, low, close;
+    bool hasTOD;
+    size_t vol;
+
+    auto isNum(in char ch) { return ch >= '0' && ch <= '9'; }
+    pure @safe @nogc nothrow auto readNum(T)(in string data, ref int idx, out T output)
+    {
+        foreach(i, n; data)
+        {
+            if(!isNum(n)) { idx++; return i; }
+
+            output *= 10;
+            output += n - '0';
+            idx++;
+        }
+
+        return data.length;
+    }
+
+    pure @safe nothrow auto readDouble(in string data, ref int idx, out double output)
+    {
+        enum powersOf10 = [
+            1.,    
+            10.,
+            100.,
+            1.0e3,
+            1.0e4,
+            1.0e5,
+            1.0e6,
+            1.0e7,
+            1.0e8,
+            1.0e9
+        ];
+
+        output = 0;
+
+        int _mantisa;
+        int _fraction;
+
+        bool prec;
+        byte precIdx;
+        foreach(n; data)
+        {
+            if(n == delimiter) { idx++; break; }
+            if(n != '.')
+            {
+                if(!isNum(n))
+                {
+                    trustedPureDebugCall!writefln("Invalid character '%s' in %s", n, data);
+                    return false;
+                }
+
+                if(!prec)
+                {
+                    _mantisa *= 10;
+                    _mantisa += n - '0';
+                }
+                else
+                {
+                    _fraction *= 10;
+                    _fraction += n - '0';
+                    precIdx++;
+                }
+            }
+            else prec = true;
+
+            idx++;
+        }
+
+        output = _mantisa +  cast(double)(_fraction) / powersOf10[precIdx];
+
+        return true;
+    }
+
+    pure @safe nothrow auto forceChar(in string data, ref int idx, char ch)
+    {
+        if(data[idx] != ch)
+        {
+            trustedPureDebugCall!writefln("Invalid character '%s' in %s", ch, data);
+            return false;
+        }
+
+        idx++;
+        return true;
+    }
+
+    int idx;
+    while(!isNum(data[idx])) 
+    {
+        idx++; //find first number
+        if(idx == data.length)
+        {
+            trustedPureDebugCall!writefln("Number not found in '%s'", data);
+            return false;
+        }
+    }
+
+    static if(ff == FileFormat.ninjaTrader)
+    {
+        if(readNum(data[idx..idx+4], idx, year) != 4) return false;
+        if(readNum(data[idx..idx+2], idx, month) != 2) return false;
+        if(readNum(data[idx..idx+2], idx, day) != 2) return false;
+
+        if(data[idx] == ' ')
+        {
+            hasTOD = true;
+            idx++;
+            if(readNum(data[idx..idx+2], idx, hour) != 2) return false;
+            if(readNum(data[idx..idx+2], idx, min) != 2) return false;
+            if(readNum(data[idx..idx+2], idx, sec) != 2) return false;
+        }
+
+        if(!forceChar(data, idx, delimiter)) return false;
+    }
+    else static if(ff == FileFormat.tradeStation)
+    {
+        //read MM/dd/yyyy
+        if(readNum(data[idx..idx+2], idx, month) != 2) return false;
+        if(!forceChar(data, idx, '/')) return false;
+        if(readNum(data[idx..idx+2], idx, day) != 2) return false;
+        if(!forceChar(data, idx, '/')) return false;
+        if(readNum(data[idx..idx+4], idx, year) != 4) return false;
+        if(!forceChar(data, idx, delimiter)) return false;
+
+        bool isDouble;
+        for(int i=idx; i<data.length; i++)
+        {
+            if(isNum(data[i])) continue;
+            else if(data[i] == '.') { isDouble = true; break; }
+            else if(data[i] == delimiter) break;
+            else return false;
+        }
+
+        if(!isDouble)
+        {
+            if(data[idx+4] != delimiter) return false;
+
+            //read hhmm
+            hasTOD = true;
+            if(readNum(data[idx..idx+2], idx, hour) != 2) return false;
+            if(readNum(data[idx..idx+2], idx, min) != 2) return false;
+            if(!forceChar(data, idx, delimiter)) return false;
+        }
+    }
+
+    if(!readDouble(data[idx..$], idx, open)) return false;
+    if(!readDouble(data[idx..$], idx, high)) return false;
+    if(!readDouble(data[idx..$], idx, low)) return false;
+    if(!readDouble(data[idx..$], idx, close)) return false;
+    if(idx != data.length) if(!readNum(data[idx..$], idx, vol)) return false;
+    if(idx != data.length) return false;
+
+    bar = hasTOD ? Bar(DateTime(year, month, day, hour, min, sec), open, high, low, close, vol)
+        : Bar(Date(year, month, day), open, high, low, close, vol);
+
+    return true;
+}
+
+unittest
+{
+    import std.stdio;
+
+    Bar expected = Bar(DateTime(2010, 3, 2, 5, 6, 7), 58.67865, 58.82547, 57.03316, 57.73132, 100);
+
+    Bar b;
+    assert(tryReadBar!(FileFormat.ninjaTrader)("20100302 050607;58.67865;58.82547;57.03316;57.73132;100", b));
+    assert(tryReadBar!(FileFormat.ninjaTrader)("20100302 050607;58.67865;58.82547;57.03316;57.73132;100;", b));
+    assert(b == expected);
+    expected = Bar(DateTime(2010, 3, 2, 5, 6, 0), 58.67865, 58.82547, 57.03316, 57.73132, 100);
+    assert(tryReadBar!(FileFormat.tradeStation)("03/02/2010,0506,58.67865,58.82547,57.03316,57.73132,100,", b));
+    assert(tryReadBar!(FileFormat.tradeStation)("03/02/2010,0506,58.67865,58.82547,57.03316,57.73132,100", b));
+    assert(b == expected);
+    expected = Bar(Date(2010, 3, 2), 58.67865, 58.82547, 57.03316, 57.73132, 100);
+    assert(tryReadBar!(FileFormat.ninjaTrader)("20100302;58.67865;58.82547;57.03316;57.73132;100", b));
+    assert(b == expected);
+    assert(tryReadBar!(FileFormat.tradeStation)("03/02/2010,58.67865,58.82547,57.03316,57.73132,100", b));
+    assert(b == expected);
+
+    //invalid bars
+    assert(!tryReadBar!(FileFormat.ninjaTrader)("20100302050607;58.67865;58.82547;57.03316;57.73132;100", b));
+    assert(!tryReadBar!(FileFormat.ninjaTrader)("20100302 050607;58,67865;58.82547;57.03316;57.73132;100", b));
+    assert(!tryReadBar!(FileFormat.ninjaTrader)("20100302 050607;58,67865;58.82547;57.03316;57.73132,100", b));
+    assert(!tryReadBar!(FileFormat.ninjaTrader)("invalid", b));
+
+    assert(!tryReadBar!(FileFormat.tradeStation)("03/02/2010,0506;58.67865,58.82547,57.03316,57.73132,100", b));
+    assert(!tryReadBar!(FileFormat.tradeStation)("03/02/2010,050602,58.67865,58.82547,57.03316,57.73132,100", b));
+    assert(!tryReadBar!(FileFormat.tradeStation)("invalid", b));
+}
+
+/**
+ * Tries to guess fileformat for BAR from the input string
+ * Returns null if undeterminable
+ * 
+ * NT format is:
+ * yyyyMMdd HHmmss;open price;high price;low price;close price;volume
+ * or
+ * yyyyMMdd;open price;high price;low price;close price;volume
+ * 
+ * TS format is:
+ * MM/dd/yyyy,HHMM,open price, high price, low price, volume
+ * or
+ * MM/dd/yyyy,open price, high price, low price, volume
+ */
+pure @safe FileFormat guessFileFormat(in string data)
+{
+    Bar b;
+    if(tryReadBar!(FileFormat.ninjaTrader)(data, b)) return FileFormat.ninjaTrader;
+    if(tryReadBar!(FileFormat.tradeStation)(data, b)) return FileFormat.tradeStation;
+
+    return FileFormat.guess;
+}
+
+unittest
+{
+    //Test guessing FileFormat
+    assert(guessFileFormat("20100302 050607;58.67865;58.82547;57.03316;57.73132;100") == FileFormat.ninjaTrader);
+    assert(guessFileFormat("20100302;58.67865;58.82547;57.03316;57.73132;100") == FileFormat.ninjaTrader);
+    assert(guessFileFormat("20100302;58.67865;58.82547;57.03316;57.73132") == FileFormat.ninjaTrader);
+    assert(guessFileFormat("03/02/2010,0506,58.67865,58.82547,57.03316,57.73132,100") == FileFormat.tradeStation);
+    assert(guessFileFormat("03/02/2010,58.67865,58.82547,57.03316,57.73132,100") == FileFormat.tradeStation);
+    assert(guessFileFormat("03/02/2010,0506,58.67865,58.82547,57.03316,57.73132,100,500") == FileFormat.guess);
+    assert(guessFileFormat("a;b;c;d;e;f") == FileFormat.guess);
+    assert(guessFileFormat("a,b,c,d,e,f") == FileFormat.guess);
+    assert(guessFileFormat("blablabla") == FileFormat.guess);
+}
 
 /**
  * Defines BAR structure
@@ -11,19 +247,8 @@ enum FileFormat {ninjaTrader, tradeStation, guess}
 struct Bar
 {
     import std.datetime;
-    import std.typecons;
+    import std.format;
     import std.range;
-
-    struct NTLayout {string date; double open; double high; double low; double close;size_t volume;}
-    struct TSLayoutLong {string date; string time; double open; double high; double low; double close;size_t volume;}
-    alias NTLayout TSLayoutShort;
-
-//    yyyyMMdd HHmmss;open price;high price;low price;close price;volume
-//        * or
-//            * yyyyMMdd;open price;high price;low price;close price;volume
-//        * 
-//            * TS format is:
-//            * MM/dd/yyyy,HHMM
 
     private bool _hasTOD;
     private DateTime _time;
@@ -46,7 +271,7 @@ struct Bar
      *  close - closing price
      *  volume - traded stock volume
      */
-    pure nothrow this(DateTime time, double open, double high, double low, double close, ulong volume = 0)
+    pure @safe @nogc nothrow this(DateTime time, double open, double high, double low, double close, ulong volume = 0) @nogc
     {
         this._time = time;
         this._open = open;
@@ -66,7 +291,7 @@ struct Bar
      *  close - closing price
      *  volume - traded stock volume
      */
-    pure nothrow this(Date date, double open, double high, double low, double close, ulong volume = 0)
+    pure @safe nothrow this(Date date, double open, double high, double low, double close, ulong volume = 0)
     {
         this._time = DateTime(date);
         this._open = open;
@@ -98,59 +323,28 @@ struct Bar
      * if guess file format is specified, it should be noted that than guesFileFormat is called and if many bars are created this way, every
      * bar is created this guessing way so it is unnecessary slower -> so for bigger data use guessFileFormat before and call this with its output
      */
-    this(in string data, FileFormat ff = FileFormat.guess)
+    pure this(in string data, FileFormat ff = FileFormat.guess)
     {
-        enum setOHLC = "this._open = rec.open; this._high = rec.high; this._low = rec.low; this._close = rec.close; this._volume = rec.volume;";
-
-        import std.string : strip;
-        import std.array;
-        import std.conv;
-        import std.csv;
-        
         //TODO: add possibility to specify source TimeZone so we can convert input datetime to internal UTC
-        string stripped = data.strip;
 
-        auto fileFormat = Bar.guessFileFormat(stripped);
-        if(fileFormat.isNull) throw new Exception("Unknown input data: " ~ data);
-        ff = fileFormat;
+        if(ff == FileFormat.guess)
+        {
+            auto fileFormat = guessFileFormat(data);
+            if(fileFormat == FileFormat.guess) throw new Exception("Unknown input data: " ~ data);
+            ff = fileFormat;
+        }
 
         final switch(ff)
         {
             case(FileFormat.ninjaTrader):
-                auto fields = stripped.split(";");
-                if(fields.length != 5 && fields.length != 6) throw new Exception(stripped ~ " is not a valid NT format");
-                
-                auto records = csvReader!NTLayout(stripped,';');
-                auto rec = records.front;
-                if(rec.date.length == 15)
-                {
-                    this.time = DateTime(Date.fromISOString(rec.date[0..8]), TimeOfDay.fromISOString(rec.date[8..$]));
-                }
-                else
-                {
-                    this.time = Date.fromISOString(rec.date);
-                }
-                mixin(setOHLC);
+                Bar b;
+                if(!tryReadBar!(FileFormat.ninjaTrader)(data, b)) throw new Exception("This is not a NinjaTrader data format: " ~ data);
+                this = b;
                 break;
             case(FileFormat.tradeStation):
-                auto fields = stripped.split(",");
-                if(fields.length != 7 && fields.length != 6) throw new Exception(stripped ~ " is not a valid TS format");
-                if(fields.length == 6) //short
-                {
-                    auto records = csvReader!TSLayoutShort(stripped);
-                    auto rec = records.front;
-                    this.time = Date(to!int(rec.date[6..$]), to!int(rec.date[0..2]), to!int(rec.date[3..5])); // MM/dd/yyyy
-                    mixin(setOHLC);
-                }
-                else //long
-                {
-                    auto records = csvReader!TSLayoutLong(stripped);
-                    auto rec = records.front;
-                    this.time = DateTime(
-                        Date(to!int(rec.date[6..$]), to!int(rec.date[0..2]), to!int(rec.date[3..5])), // MM/dd/yyyy
-                        TimeOfDay(to!int(rec.time[0..2]), to!int(rec.time[2..$]))); // HHmm
-                    mixin(setOHLC);
-                }
+                Bar b;
+                if(!tryReadBar!(FileFormat.tradeStation)(data, b)) throw new Exception("This is not a TradeStation data format: " ~ data);
+                this = b;
                 break;
             case(FileFormat.guess):
                 assert(0, "Invalid operation");
@@ -166,117 +360,9 @@ struct Bar
     }
 
     /// Returns just price values as OHLC array
-    pure nothrow @property double[] ohlc() 
+    pure nothrow @property auto ohlc() const
     {
         return [this._open, this._high, this._low, this._close];
-    }
-
-    /**
-     * Gets CSV format string of the BAR
-     * 
-     * NT format is:
-     * yyyyMMdd HHmmss;open price;high price;low price;close price;volume
-     * or
-     * yyyyMMdd;open price;high price;low price;close price;volume
-     * 
-     * TS format is:
-     * MM/dd/yyyy,HHMM,open price, high price, low price, volume
-     * or
-     * MM/dd/yyyy,open price, high price, low price, volume
-     */
-    string toString(FileFormat ff = FileFormat.ninjaTrader) const
-    {
-        import std.string : format;
-
-    	//TODO: add posibility to chose target TimeZone
-        final switch(ff)
-        {
-            case FileFormat.guess:
-                //fall back to the default FileFormat
-            case FileFormat.ninjaTrader:
-                if(_hasTOD)
-                {
-                    return format("%s %s;%.5f;%.5f;%.5f;%.5f;%d", 
-                          time.date.toISOString, time.timeOfDay.toISOString,
-                          _open, _high, _low, _close, _volume);
-                }
-                return format("%s;%.5f;%.5f;%.5f;%.5f;%d", 
-                      time.date.toISOString,
-                      _open, _high, _low, _close, _volume);
-            case FileFormat.tradeStation:
-                if(_hasTOD)
-                {
-                    return format("%02d/%02d/%d,%02d%02d,%.5f,%.5f,%.5f,%.5f,%d", 
-                                  time.month, time.day, time.year, time.hour, time.minute,
-                                  _open, _high, _low, _close, _volume);
-                }
-                return format("%02d/%02d/%d,%.5f,%.5f,%.5f,%.5f,%d", 
-                              time.month, time.day, time.year,
-                              _open, _high, _low, _close, _volume);
-        }
-    }
-
-    /**
-     * Tries to guess fileformat for BAR from the input string
-     * Returns null if undeterminable
-     * 
-     * NT format is:
-     * yyyyMMdd HHmmss;open price;high price;low price;close price;volume
-     * or
-     * yyyyMMdd;open price;high price;low price;close price;volume
-     * 
-     * TS format is:
-     * MM/dd/yyyy,HHMM,open price, high price, low price, volume
-     * or
-     * MM/dd/yyyy,open price, high price, low price, volume
-     */
-    static Nullable!FileFormat guessFileFormat(in char[] data)
-    {
-        import std.csv;
-        import std.array;
-
-    	//TODO: use regex - faster?
-	    //TODO" add variant from http://www.intradaystockdata.com/sample_files.html
-	    //TODO" add variants from http://www.histdata.com/f-a-q/data-files-detailed-specification/
-
-        try
-        {
-            auto fields = data.split(";");
-            if(fields.length == 5 || fields.length == 6)
-            {
-                //probably NT
-                auto records = csvReader!NTLayout(data,';');
-                auto rec = records.front;
-
-                return Nullable!FileFormat(FileFormat.ninjaTrader);
-            }
-
-            fields = data.split(",");
-            if(fields.length == 7)
-            {
-                //probably TS
-                auto records = csvReader!TSLayoutLong(data);
-                auto rec = records.front;
-                
-                return Nullable!FileFormat(FileFormat.tradeStation);
-            }
-            if(fields.length == 6)
-            {
-                //probably TS
-                auto records = csvReader!TSLayoutShort(data);
-                auto rec = records.front;
-                
-                return Nullable!FileFormat(FileFormat.tradeStation);
-            }
-        }
-        catch(CSVException e)
-        {
-            import std.stdio;
-
-            stderr.writefln("Error guessing fileformat from '%s': %s", data, e);
-        }
-
-        return Nullable!FileFormat();
     }
 
     pure void opOpAssign(string op : "~")(in Bar rhs) @safe @nogc
@@ -286,9 +372,9 @@ struct Bar
             this = rhs;
             return;
         }
-
+        
         assert(this._hasTOD == rhs._hasTOD);
-
+        
         this._time = rhs.time;
         this._hasTOD = rhs._hasTOD;
         this._volume += rhs.volume;
@@ -296,11 +382,100 @@ struct Bar
         if(this.low > rhs.low) this._low = rhs.low;
         this._close = rhs.close;
     }
-
+    
     pure void opOpAssign(string op : "~", R)(R rhs) @safe @nogc
         if(isInputRange!R && is(ElementType!R : Bar))
     {
         foreach(b; rhs) this ~= b;
+    }
+
+    /**
+     * Writes the formated Bar to specified sink
+     * 
+     * To specify type of output, custom format specifiers can be used:
+     *      %n: Ninja Trader format
+     *      %t: Trade Station format
+     */
+    void toString(scope void delegate(const(char)[]) sink, FormatSpec!char fmt) const
+    {
+        switch(fmt.spec)
+        {
+            case 't': //tradestation
+                if(_hasTOD)
+                {
+                    formattedWrite(sink, "%02d/%02d/%d,%02d%02d,%.5f,%.5f,%.5f,%.5f,%d", 
+                                  time.month, time.day, time.year, time.hour, time.minute,
+                                  _open, _high, _low, _close, _volume);
+                }
+                else
+                {
+                    formattedWrite(sink, "%02d/%02d/%d,%.5f,%.5f,%.5f,%.5f,%d", 
+                              time.month, time.day, time.year,
+                              _open, _high, _low, _close, _volume);
+                }
+                break;
+            case 'n': //ninja trader or default
+            default:
+                if(_hasTOD)
+                {
+                    formattedWrite(sink, "%s %s;%.5f;%.5f;%.5f;%.5f;%d", 
+                                   time.date.toISOString, time.timeOfDay.toISOString,
+                                   _open, _high, _low, _close, _volume);
+                }
+                else
+                {
+                    formattedWrite(sink, "%s;%.5f;%.5f;%.5f;%.5f;%d", 
+                                   time.date.toISOString,
+                                   _open, _high, _low, _close, _volume);
+                }
+                break;
+        }
+    }
+
+    /**
+     * Gets CSV format string of the BAR in NT format
+     * 
+     * NT format is:
+     * yyyyMMdd HHmmss;open price;high price;low price;close price;volume
+     * or
+     * yyyyMMdd;open price;high price;low price;close price;volume
+     */
+    string toString() const
+    {
+        import std.array : appender;
+
+        auto writer = appender!string;
+        formattedWrite(writer, "%n", this);
+        return writer.data;
+    }
+
+    /**
+     * Gets CSV format string of the BAR in NT format
+     * 
+     * NT format is:
+     * yyyyMMdd HHmmss;open price;high price;low price;close price;volume
+     * or
+     * yyyyMMdd;open price;high price;low price;close price;volume
+     */
+    string toString(FileFormat ff = FileFormat.ninjaTrader) const
+    {
+        import std.array : appender;
+
+        string formatStr;
+        final switch(ff)
+        {
+            case FileFormat.tradeStation:
+                formatStr = "%t";
+                break;
+            case FileFormat.ninjaTrader:
+            case FileFormat.guess:
+                formatStr = "%n";
+                break;
+        }
+        
+        auto writer = appender!string;
+        formattedWrite(writer, formatStr, this);
+        return writer.data;
     }
 }
 
@@ -335,17 +510,6 @@ unittest
 
     b = Bar(Date(2010, 3, 2), 58.678654, 58.825467, 57.033158, 57.7313214, 100);
     assert(b.toString(FileFormat.tradeStation) == "03/02/2010,58.67865,58.82547,57.03316,57.73132,100");
-
-    //Test guessing FileFormat
-    assert(Bar.guessFileFormat("20100302 050607;58.67865;58.82547;57.03316;57.73132;100") == FileFormat.ninjaTrader);
-    assert(Bar.guessFileFormat("20100302;58.67865;58.82547;57.03316;57.73132;100") == FileFormat.ninjaTrader);
-    assert(Bar.guessFileFormat("20100302;58.67865;58.82547;57.03316;57.73132") == FileFormat.ninjaTrader);
-    assert(Bar.guessFileFormat("03/02/2010,0506,58.67865,58.82547,57.03316,57.73132,100") == FileFormat.tradeStation);
-    assert(Bar.guessFileFormat("03/02/2010,58.67865,58.82547,57.03316,57.73132,100") == FileFormat.tradeStation);
-    assert(Bar.guessFileFormat("03/02/2010,0506,58.67865,58.82547,57.03316,57.73132,100,500").isNull);
-    assert(Bar.guessFileFormat("a;b;c;d;e;f").isNull);
-    assert(Bar.guessFileFormat("a,b,c,d,e,f").isNull);
-    assert(Bar.guessFileFormat("blablabla").isNull);
 
     //Test Bar.fromString
     b = Bar("20100302 050607;58.678654;58.825467;57.033158;57.7313214;100");

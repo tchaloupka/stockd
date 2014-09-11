@@ -35,8 +35,8 @@ auto marketData(T)(T input, in S.Symbol symbol = S.Symbol.init, TimeFrame tf = T
         }
 
         //guess input format
-        Nullable!FileFormat ff;
-        while((ff = Bar.guessFileFormat(_input.front)).isNull)
+        FileFormat ff;
+        while((ff = guessFileFormat(_input.front)) == FileFormat.guess)
         {
             _input.popFront();
         }
@@ -156,7 +156,6 @@ unittest
     ];
 
     auto data = marketData(barsText).array;
-
     assert(data == expected);
 
     auto data2 = marketData(inputRangeObject(data)).array;

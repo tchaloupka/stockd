@@ -22,7 +22,7 @@
  */
 module stockd.data.symbol;
 
-import stockd.defs.templates;
+import stockd.defs.common;
 
 /**
  * Describes data

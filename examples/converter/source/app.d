@@ -1,6 +1,7 @@
 import std.stdio;
 import std.getopt;
 import std.file;
+import std.format;
 import std.exception;
 import std.array;
 
@@ -32,13 +33,24 @@ int main(string[] args)
 
     auto input = inputFileName.empty? stdin : File(inputFileName, "r");
     auto output = outputFileName.empty? stdout : File(outputFileName, "w");
-
     auto data = marketData(input).tfConv(multiply);
 
-    foreach(bar; data)
+    string formatStr;
+
+    final switch(ff)
     {
-        //TODO: implement output range to write directly to file and avoid allocations in bar.toString
-        output.writeln(bar.toString(ff));
+        case FileFormat.guess:
+        case FileFormat.ninjaTrader:
+            formatStr = "%n";
+            break;
+        case FileFormat.tradeStation:
+            formatStr = "%t";
+            break;
+    }
+
+    foreach(b; data)
+    {
+        output.writefln(formatStr, b);
     }
 
     return 0;

@@ -1,4 +1,4 @@
-module stockd.defs.templates;
+module stockd.defs.common;
 
 import std.string : format;
 
@@ -17,4 +17,12 @@ mixin template property(T, string name, T init)
                  @property @safe @nogc pure nothrow public T %s() const { return _%s; }
                  @property @safe @nogc pure nothrow public void %s(T value) { _%s = value; }", 
                  name, init.stringof, name, name, name, name));
+}
+
+debug auto trustedPureDebugCall (alias fn, A...) (A args) @trusted pure nothrow
+{
+    try
+    {
+        debug return fn(args);
+    }catch{}
 }

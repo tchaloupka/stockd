@@ -124,11 +124,11 @@ unittest
     {
         assert(expected[i].time == eval[i].time);
         assert(expected[i].volume == eval[i].volume);
-        assert(approxEqual(expected[i].ohlc(), eval[i].ohlc()));
+        assert(approxEqual(expected[i].ohlc, eval[i].ohlc));
 
         auto hab = ha.Add(bars[i]);
         assert(expected[i].time == hab.time);
         assert(expected[i].volume == hab.volume);
-        assert(approxEqual(expected[i].ohlc(), hab.ohlc()));
+        assert(approxEqual(expected[i].ohlc, hab.ohlc));
     }
 }
