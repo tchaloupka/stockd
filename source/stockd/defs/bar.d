@@ -389,6 +389,22 @@ struct Bar
         foreach(b; rhs) this ~= b;
     }
 
+    pure @safe nothrow @nogc bool opEquals()(auto ref const Bar rhs) const
+    {
+        import std.math;
+        enum prec = 1.0e-10;
+
+        if(this._time != rhs._time) return false;
+        if(!approxEqual(this._open, rhs._open, prec) ||
+           !approxEqual(this._high, rhs._high, prec) ||
+           !approxEqual(this._low, rhs._low, prec) ||
+           !approxEqual(this._close, rhs._close, prec))
+            return false;
+        if(this._volume != rhs._volume) return false;
+
+        return true;
+    }
+
     /**
      * Writes the formated Bar to specified sink
      * 
