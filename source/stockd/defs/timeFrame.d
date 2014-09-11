@@ -18,53 +18,59 @@ struct TimeFrame
 
     private uint _minutes;
 
-    /// Gets TF total minutes
-    pure nothrow @property auto totalMinutes() @safe @nogc const
+    @nogc @safe @property pure nothrow
     {
-        return _minutes;
+        /// Gets TF total minutes
+         auto totalMinutes() const
+        {
+            return _minutes;
+        }
+
+        /// Gets TF total hours
+        auto totalHours() const
+        {
+            return _minutes / 60;
+        }
+
+        /// Gets TF total days
+        auto totalDays() const
+        {
+            return _minutes / (60*24);
+        }
+
+        /// Gets TF total weeks
+        auto totalWeeks() const
+        {
+            return _minutes / (60*24*7);
+        }
+
+        auto origin() const
+        {
+            if(_minutes >= 60 * 24 * 7) return Origin.week;
+            else if(_minutes >= 60 * 24) return Origin.day;
+            else if(_minutes >= 60 ) return Origin.hour;
+            return Origin.minute;
+        }
     }
 
-    /// Gets TF total hours
-    pure nothrow @property auto totalHours() @safe @nogc const
-    {
-        return _minutes / 60;
-    }
-
-    /// Gets TF total days
-    pure nothrow @property auto totalDays() @safe @nogc const
-    {
-        return _minutes / (60*24);
-    }
-
-    /// Gets TF total weeks
-    pure nothrow @property auto totalWeeks() @safe @nogc const
-    {
-        return _minutes / (60*24*7);
-    }
-
-    pure nothrow @property auto origin() @safe @nogc const
-    {
-        if(_minutes >= 60 * 24 * 7) return Origin.week;
-        else if(_minutes >= 60 * 24) return Origin.day;
-        else if(_minutes >= 60 ) return Origin.hour;
-        return Origin.minute;
-    }
-
-    pure @safe @nogc nothrow const invariant()
+    @nogc @safe pure nothrow const invariant()
     {
         if(_minutes >= 60 * 24 * 7) assert(_minutes % (60 * 24 * 7) == 0);  //Wx
         else if(_minutes >= 60 * 24) assert(_minutes % (60 * 24) == 0);   // Dx
         else if(_minutes >= 60 ) assert(_minutes % 60 == 0);  // Hx
     }
 
-    pure @safe @nogc nothrow this(uint minutes)
+    @nogc @safe pure nothrow
     {
-        this._minutes = minutes;
-    }
+        this(uint minutes)
+        {
+            this._minutes = minutes;
+        }
 
-    pure @safe @nogc nothrow this(Duration duration)
-    {
-        this._minutes = cast(uint)(duration.total!"minutes");
+        this(Duration duration)
+        {
+            this._minutes = cast(uint)(duration.total!"minutes");
+        }
     }
 
     pure toString() const
@@ -77,63 +83,66 @@ struct TimeFrame
         return format("W%s", _minutes / (60*24*7));
     }
 
-    pure TimeFrame opAssign(T)(auto ref in T rhs) @safe @nogc nothrow
-        if(is(T:uint) || is(Unqual!T == Duration) || is(Unqual!T == TimeFrame))
+    @nogc @safe pure nothrow
     {
-        static if(is(Unqual!T == Duration))
+        TimeFrame opAssign(T)(auto ref in T rhs)
+            if(is(T:uint) || is(Unqual!T == Duration) || is(Unqual!T == TimeFrame))
         {
-            this._minutes = cast(uint)(rhs.total!"minutes");
-        }
-        else static if(is(Unqual!T == TimeFrame))
-        {
-            this._minutes = rhs._minutes;
-        }
-        else static if(is(T:uint))
-        {
-            this._minutes = rhs;
+            static if(is(Unqual!T == Duration))
+            {
+                this._minutes = cast(uint)(rhs.total!"minutes");
+            }
+            else static if(is(Unqual!T == TimeFrame))
+            {
+                this._minutes = rhs._minutes;
+            }
+            else static if(is(T:uint))
+            {
+                this._minutes = rhs;
+            }
+
+            return this;
         }
 
-        return this;
-    }
-
-    pure TimeFrame opOpAssign(string op)(in int mul) @safe @nogc nothrow
-        if(op == "*")
-    {
-        this._minutes *= mul;
-        return this;
-    }
-
-    pure bool opEquals(T)(auto ref in T rhs) @safe @nogc nothrow const
-        if(is(T : int) || is(Unqual!T == Duration) || is(Unqual!T == TimeFrame))
-    {
-        static if(is(Unqual!T == Duration)) return this._minutes == rhs.total!"minutes";
-        else static if(is(Unqual!T == TimeFrame)) return this._minutes == rhs._minutes;
-        else static if(is(Unqual!T:int)) return this._minutes == rhs;
-
-        assert(0, "Not implemented type");
-    }
-
-    pure int opCmp(T)(auto ref in T other) @safe @nogc nothrow const
-        if(is(T:int) || is(Unqual!T == TimeFrame) || is(Unqual!T == Duration))
-    {
-        int min;
-        static if(is(T == TimeFrame))
+        TimeFrame opOpAssign(string op)(in int mul)
+            if(op == "*")
         {
-            min = other._minutes;
+            this._minutes *= mul;
+            return this;
         }
-        else static if(is(T : Duration))
-        {
-            min = cast(int)other.total!"minutes";
-        }
-        else static if(is(T:int))
-        {
-            min = other;
-        }
-        else assert(0, "Not implemented type");
 
-        if(this._minutes < min) return -1;
-        if(this._minutes == min) return 0;
-        return 1;
+        bool opEquals(T)(auto ref in T rhs) const
+            if(is(T : int) || is(Unqual!T == Duration) || is(Unqual!T == TimeFrame))
+        {
+            static if(is(Unqual!T == Duration)) return this._minutes == rhs.total!"minutes";
+            else static if(is(Unqual!T == TimeFrame)) return this._minutes == rhs._minutes;
+            else static if(is(Unqual!T:int)) return this._minutes == rhs;
+
+            assert(0, "Not implemented type");
+        }
+
+        int opCmp(T)(auto ref in T other) const
+            if(is(T:int) || is(Unqual!T == TimeFrame) || is(Unqual!T == Duration))
+        {
+            int min;
+            static if(is(T == TimeFrame))
+            {
+                min = other._minutes;
+            }
+            else static if(is(T : Duration))
+            {
+                min = cast(int)other.total!"minutes";
+            }
+            else static if(is(T:int))
+            {
+                min = other;
+            }
+            else assert(0, "Not implemented type");
+
+            if(this._minutes < min) return -1;
+            if(this._minutes == min) return 0;
+            return 1;
+        }
     }
 
     /// implicit conversion to uint
@@ -143,7 +152,7 @@ struct TimeFrame
 /**
  * Helper function to create TimeFrame struct.
  */
-pure nothrow @nogc @safe auto timeFrame(string origin)(uint value)
+@nogc @safe pure nothrow auto timeFrame(string origin)(uint value)
     if(origin == "m" || origin == "h" || origin == "d" || origin == "w" ||
        origin == "M" || origin == "H" || origin == "D" || origin == "W" ||
        origin == "minute" || origin == "hour" || origin == "day" || origin == "week")

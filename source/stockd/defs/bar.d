@@ -34,7 +34,7 @@ pure @safe private auto tryReadBar(FileFormat ff)(in string data, out Bar bar)
         return data.length;
     }
 
-    pure @safe nothrow auto readDouble(in string data, ref int idx, out double output)
+    @safe pure nothrow auto readDouble(in string data, ref int idx, out double output)
     {
         enum powersOf10 = [
             1.,    
@@ -63,7 +63,7 @@ pure @safe private auto tryReadBar(FileFormat ff)(in string data, out Bar bar)
             {
                 if(!isNum(n))
                 {
-                    trustedPureDebugCall!writefln("Invalid character '%s' in %s", n, data);
+                    debug trustedPureDebugCall!writefln("Invalid character '%s' in %s", n, data);
                     return false;
                 }
 
@@ -93,7 +93,7 @@ pure @safe private auto tryReadBar(FileFormat ff)(in string data, out Bar bar)
     {
         if(data[idx] != ch)
         {
-            trustedPureDebugCall!writefln("Invalid character '%s' in %s", ch, data);
+            debug trustedPureDebugCall!writefln("Invalid character '%s' in %s", ch, data);
             return false;
         }
 
@@ -107,7 +107,7 @@ pure @safe private auto tryReadBar(FileFormat ff)(in string data, out Bar bar)
         idx++; //find first number
         if(idx == data.length)
         {
-            trustedPureDebugCall!writefln("Number not found in '%s'", data);
+            debug trustedPureDebugCall!writefln("Number not found in '%s'", data);
             return false;
         }
     }
@@ -218,7 +218,7 @@ unittest
  * or
  * MM/dd/yyyy,open price, high price, low price, volume
  */
-pure @safe FileFormat guessFileFormat(in string data)
+@safe pure FileFormat guessFileFormat(in string data)
 {
     Bar b;
     if(tryReadBar!(FileFormat.ninjaTrader)(data, b)) return FileFormat.ninjaTrader;
@@ -252,9 +252,9 @@ struct Bar
 
     private bool _hasTOD;
     private DateTime _time;
-    @property @safe @nogc pure nothrow public DateTime time() const { return _time; }
-    @property @safe @nogc pure nothrow public void time(DateTime value) { _time = value; _hasTOD = true; }
-    @property @safe pure nothrow public void time(Date value) { _time = DateTime(value); _hasTOD = false; }
+    @nogc @safe @property pure nothrow public DateTime time() const { return _time; }
+    @nogc @safe @property pure nothrow public void time(DateTime value) { _time = value; _hasTOD = true; }
+    @safe @property pure nothrow public void time(Date value) { _time = DateTime(value); _hasTOD = false; }
 
     mixin property!(double, "open", 0);
     mixin property!(double, "high", 0);
@@ -271,7 +271,7 @@ struct Bar
      *  close - closing price
      *  volume - traded stock volume
      */
-    pure @safe @nogc nothrow this(DateTime time, double open, double high, double low, double close, ulong volume = 0) @nogc
+    @nogc @safe pure nothrow this(DateTime time, double open, double high, double low, double close, ulong volume = 0)
     {
         this._time = time;
         this._open = open;
@@ -291,7 +291,7 @@ struct Bar
      *  close - closing price
      *  volume - traded stock volume
      */
-    pure @safe nothrow this(Date date, double open, double high, double low, double close, ulong volume = 0)
+    @safe pure nothrow this(Date date, double open, double high, double low, double close, ulong volume = 0)
     {
         this._time = DateTime(date);
         this._open = open;
@@ -352,7 +352,7 @@ struct Bar
     }
 
     /// Ensure BAR validity
-    pure invariant()
+    @safe pure const invariant()
     {
         import std.stdio;
         assert(_high >= _open && _high >= _low && _high >= _close);
@@ -360,12 +360,12 @@ struct Bar
     }
 
     /// Returns just price values as OHLC array
-    pure nothrow @property auto ohlc() const
+    @property pure nothrow auto ohlc() const
     {
         return [this._open, this._high, this._low, this._close];
     }
 
-    pure void opOpAssign(string op : "~")(in Bar rhs) @safe @nogc
+    @nogc @safe pure void opOpAssign(string op : "~")(in Bar rhs)
     {
         if(this == Bar.init)
         {
@@ -383,13 +383,13 @@ struct Bar
         this._close = rhs.close;
     }
     
-    pure void opOpAssign(string op : "~", R)(R rhs) @safe @nogc
+    @nogc @safe pure void opOpAssign(string op : "~", R)(R rhs)
         if(isInputRange!R && is(ElementType!R : Bar))
     {
         foreach(b; rhs) this ~= b;
     }
 
-    pure @safe nothrow @nogc bool opEquals()(auto ref const Bar rhs) const
+    @nogc @safe pure nothrow bool opEquals()(auto ref const Bar rhs) const
     {
         import std.math;
         enum prec = 1.0e-10;
