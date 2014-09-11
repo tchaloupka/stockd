@@ -33,7 +33,7 @@ struct Symbol
 
     //TODO: add more
 
-    alias _name this;
+    alias name this;
 }
 
 unittest

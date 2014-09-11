@@ -62,7 +62,7 @@ struct MarketData(T)
     private S.Symbol _symbol;
     private TimeFrame _timeFrame;
 
-    @nogc @property @safe pure nothrow public auto Symbol() const
+    @nogc @property @safe pure nothrow public auto symbol() const
     {
         return _symbol;
     }

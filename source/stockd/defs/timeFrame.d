@@ -77,10 +77,10 @@ struct TimeFrame
     {
         import std.string;
 
-        if(_minutes < 60) return format("M%s", _minutes);
-        if(_minutes < 60 * 24) return format("H%s", _minutes / 60);
-        if(_minutes < 60 * 24 * 7) return format("D%s", _minutes / (60*24));
-        return format("W%s", _minutes / (60*24*7));
+        if(_minutes < 60) return format("m%s", _minutes);
+        if(_minutes < 60 * 24) return format("h%s", _minutes / 60);
+        if(_minutes < 60 * 24 * 7) return format("d%s", _minutes / (60*24));
+        return format("w%s", _minutes / (60*24*7));
     }
 
     @nogc @safe pure nothrow

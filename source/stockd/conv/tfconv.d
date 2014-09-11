@@ -18,6 +18,7 @@ private struct TimeFrameConv(T)
     if (isInputRange!T && is(ElementType!T : Bar))
 {
     import std.datetime;
+    import stockd.data.symbol;
 
     enum guessNumBar = 10;
 
@@ -25,6 +26,7 @@ private struct TimeFrameConv(T)
     private uint _factor;
     private Bar currentBar;
     private TimeFrame _targetTF;
+    private Symbol _symbol;
     private DateTime _lastWaitTime;
     private ubyte _eodHour;
 
@@ -40,14 +42,24 @@ private struct TimeFrameConv(T)
         import std.range;
         import std.exception : enforce;
         import std.traits;
+        import stockd.data.marketdata;
 
         enforce(factor > 0);
         enforce(!input.empty);
-
+        
         this._factor = factor;
+        static if(__traits(compiles, input.symbol))
+        {
+            this._symbol = input.symbol;
+        }
 
-        //guess time frame from input
-        static if(isArray!T)
+        //set target timeframe
+        static if(__traits(compiles, input.timeFrame)) //reuse time frame from input
+        {
+            _targetTF = input.timeFrame * factor;
+            _input = inputRangeObject(input);
+        }
+        else static if(isArray!T) //guess time frame from input
         {
             _targetTF = guessTimeFrame(input[0..min(guessNumBar, input.length)]) * factor;
             _input = inputRangeObject(input);
@@ -66,6 +78,16 @@ private struct TimeFrameConv(T)
             //prepare first Bar
             this.popFront();
         }
+    }
+
+    @nogc @property pure nothrow auto timeFrame() const
+    {
+        return _targetTF;
+    }
+
+    @nogc @property pure nothrow auto symbol() const
+    {
+        return _symbol;
     }
 
     @property bool empty()

@@ -1,39 +1,63 @@
 import std.stdio;
 import std.getopt;
 import std.file;
-import std.format;
-import std.exception;
+import std.exception : enforce;
 import std.array;
+import std.datetime;
+import std.path;
+import std.string : indexOf;
 
 import stockd.defs;
-import stockd.data.marketdata;
+import stockd.data;
 import stockd.conv.tfconv;
 
 int main(string[] args)
 {
-    string inputFileName;
-    string outputFileName;
+    StopWatch sw;
+    sw.start();
+
+    string inputFilePath;
+    string outputFilePath;
     uint multiply = 1;
     FileFormat ff = FileFormat.ninjaTrader;
 
     getopt(
         args,
-        "input|i", &inputFileName,
-        "output|o", &outputFileName,
+        "input|i", &inputFilePath,
+        "output|o", &outputFilePath,
         "multiply|m", &multiply,
         "format|f", &ff);
 
     debug
     {
-        if(inputFileName.empty) inputFileName = "data/EURUSD_M1_201311.csv";
+        if(inputFilePath.empty) inputFilePath = "data/EURUSD_M1_201311.csv";
     }
 
     enforce(ff != FileFormat.guess, "Invalid option for output format");
-    enforce(inputFileName.empty || (inputFileName.exists && inputFileName.isFile), "Invalid input file: " ~ inputFileName);
+    enforce(inputFilePath.empty || (inputFilePath.exists && inputFilePath.isFile), "Invalid input file: " ~ inputFilePath);
 
-    auto input = inputFileName.empty? stdin : File(inputFileName, "r");
-    auto output = outputFileName.empty? stdout : File(outputFileName, "w");
-    auto data = marketData(input).tfConv(multiply);
+    auto input = inputFilePath.empty? stdin : File(inputFilePath, "r");
+    auto output = outputFilePath.empty? stdout : File(outputFilePath, "w");
+
+    auto symbol = "stdin";
+    if(!inputFilePath.empty)
+    {
+        auto name = baseName(inputFilePath);
+        auto idx = indexOf(name, '_');
+        if(idx>0) symbol = name[0..idx];
+        else
+        {
+            idx = indexOf(name, '.');
+            if(idx>0) symbol = name[0..idx];
+            else symbol = stripExtension(name);
+        }
+    }
+
+    auto inputRange = marketData(input, Symbol(symbol));
+    auto data = inputRange.tfConv(multiply);
+
+    writefln("Input: %s.%s", inputRange.symbol, inputRange.timeFrame);
+    writefln("Output: %s.%s", data.symbol, data.timeFrame);
 
     string formatStr;
 
@@ -52,6 +76,10 @@ int main(string[] args)
     {
         output.writefln(formatStr, b);
     }
+
+    sw.stop();
+
+    writefln("Duration: %s ms", sw.peek.msecs);
 
     return 0;
 }
