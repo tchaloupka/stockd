@@ -42,15 +42,11 @@ int main(string[] args)
     auto symbol = "stdin";
     if(!inputFilePath.empty)
     {
+        import std.algorithm : min;
+
         auto name = baseName(inputFilePath);
-        auto idx = indexOf(name, '_');
-        if(idx>0) symbol = name[0..idx];
-        else
-        {
-            idx = indexOf(name, '.');
-            if(idx>0) symbol = name[0..idx];
-            else symbol = stripExtension(name);
-        }
+        auto idx = min(indexOf(name, '_'), indexOf(name, '.'), name.length);
+        symbol = name[0..idx];
     }
 
     auto inputRange = marketData(input, Symbol(symbol));
