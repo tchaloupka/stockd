@@ -1,0 +1,10 @@
+{
+    "name": "converter",
+    "description": "Performs some simple conversions of market data",
+    "copyright": "Copyright © 2014, Tomáš Chaloupka",
+    "authors": [ "Tomáš Chaloupka" ],
+    "license": "BSL-1.0",
+    "dependencies": {
+        "stockd": {"version": "~master", "path": "../../"}
+    }
+}

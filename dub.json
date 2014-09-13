@@ -1,0 +1,15 @@
+{
+    "name": "stockd",
+    "description": "Financial analysis library",
+    "homepage": "https://github.com/chalucha/stockd",
+    "copyright": "Copyright © 2000, Tomáš Chaloupka",
+    "authors": [ "Tomáš Chaloupka" ],
+    "license": "BSL-1.0",
+    "dependencies": {
+    },
+    "targetType": "library",
+    "subPackages": [
+        "./examples/converter/",
+        "./examples/evaluator/"
+    ]
+}
