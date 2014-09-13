@@ -3,10 +3,10 @@ module stockd.defs.bar;
 import stockd.defs.common;
 import std.datetime;
 
-enum FileFormat {ninjaTrader, tradeStation, guess}
+enum FileFormat {ninjaTrader, tradeStation, unknown}
 
 pure @safe private auto tryReadBar(FileFormat ff)(in string data, out Bar bar)
-    if(ff != FileFormat.guess)
+    if(ff != FileFormat.unknown)
 {
     import std.stdio;
 
@@ -224,7 +224,7 @@ unittest
     if(tryReadBar!(FileFormat.ninjaTrader)(data, b)) return FileFormat.ninjaTrader;
     if(tryReadBar!(FileFormat.tradeStation)(data, b)) return FileFormat.tradeStation;
 
-    return FileFormat.guess;
+    return FileFormat.unknown;
 }
 
 unittest
@@ -235,10 +235,10 @@ unittest
     assert(guessFileFormat("20100302;58.67865;58.82547;57.03316;57.73132") == FileFormat.ninjaTrader);
     assert(guessFileFormat("03/02/2010,0506,58.67865,58.82547,57.03316,57.73132,100") == FileFormat.tradeStation);
     assert(guessFileFormat("03/02/2010,58.67865,58.82547,57.03316,57.73132,100") == FileFormat.tradeStation);
-    assert(guessFileFormat("03/02/2010,0506,58.67865,58.82547,57.03316,57.73132,100,500") == FileFormat.guess);
-    assert(guessFileFormat("a;b;c;d;e;f") == FileFormat.guess);
-    assert(guessFileFormat("a,b,c,d,e,f") == FileFormat.guess);
-    assert(guessFileFormat("blablabla") == FileFormat.guess);
+    assert(guessFileFormat("03/02/2010,0506,58.67865,58.82547,57.03316,57.73132,100,500") == FileFormat.unknown);
+    assert(guessFileFormat("a;b;c;d;e;f") == FileFormat.unknown);
+    assert(guessFileFormat("a,b,c,d,e,f") == FileFormat.unknown);
+    assert(guessFileFormat("blablabla") == FileFormat.unknown);
 }
 
 /**
@@ -323,14 +323,14 @@ struct Bar
      * if guess file format is specified, it should be noted that than guesFileFormat is called and if many bars are created this way, every
      * bar is created this guessing way so it is unnecessary slower -> so for bigger data use guessFileFormat before and call this with its output
      */
-    pure this(in string data, FileFormat ff = FileFormat.guess)
+    pure this(in string data, FileFormat ff = FileFormat.unknown)
     {
         //TODO: add possibility to specify source TimeZone so we can convert input datetime to internal UTC
 
-        if(ff == FileFormat.guess)
+        if(ff == FileFormat.unknown)
         {
             auto fileFormat = guessFileFormat(data);
-            if(fileFormat == FileFormat.guess) throw new Exception("Unknown input data: " ~ data);
+            if(fileFormat == FileFormat.unknown) throw new Exception("Unknown input data: " ~ data);
             ff = fileFormat;
         }
 
@@ -346,7 +346,7 @@ struct Bar
                 if(!tryReadBar!(FileFormat.tradeStation)(data, b)) throw new Exception("This is not a TradeStation data format: " ~ data);
                 this = b;
                 break;
-            case(FileFormat.guess):
+            case(FileFormat.unknown):
                 assert(0, "Invalid operation");
         }
     }
@@ -484,7 +484,7 @@ struct Bar
                 formatStr = "%t";
                 break;
             case FileFormat.ninjaTrader:
-            case FileFormat.guess:
+            case FileFormat.unknown:
                 formatStr = "%n";
                 break;
         }

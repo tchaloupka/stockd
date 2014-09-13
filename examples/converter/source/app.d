@@ -33,7 +33,7 @@ int main(string[] args)
         if(inputFilePath.empty) inputFilePath = "data/EURUSD_M1_201311.csv";
     }
 
-    enforce(ff != FileFormat.guess, "Invalid option for output format");
+    enforce(ff != FileFormat.unknown, "Invalid option for output format");
     enforce(inputFilePath.empty || (inputFilePath.exists && inputFilePath.isFile), "Invalid input file: " ~ inputFilePath);
 
     auto input = inputFilePath.empty? stdin : File(inputFilePath, "r");
@@ -59,7 +59,7 @@ int main(string[] args)
 
     final switch(ff)
     {
-        case FileFormat.guess:
+        case FileFormat.unknown:
         case FileFormat.ninjaTrader:
             formatStr = "%n";
             break;

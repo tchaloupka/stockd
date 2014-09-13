@@ -36,10 +36,12 @@ auto marketData(T)(T input, in S.Symbol symbol = S.Symbol.init, TimeFrame tf = T
 
         //guess input format
         FileFormat ff;
-        while((ff = guessFileFormat(_input.front)) == FileFormat.guess)
+        while((ff = guessFileFormat(_input.front)) == FileFormat.unknown)
         {
             _input.popFront();
         }
+
+        debug trustedPureDebugCall!writeln("Detected file format: ", ff);
         
         import std.algorithm;
         
@@ -80,27 +82,27 @@ struct MarketData(T)
         import std.array;
         import std.range;
         import std.exception : enforce;
-    	import std.traits;
-    	import std.algorithm;
+        import std.traits;
+        import std.algorithm;
 
         enforce(input.empty == false);
 
         if(tf == TimeFrame.init)
         {
             //guess time frame from input
-    	    static if(isArray!T)
-    	    {
-    	    	_timeFrame = guessTimeFrame(input[0..min(guessNumBar, input.length)]);
-    	    	_input = inputRangeObject(input);
-    	    }
-    	    else
-    	    {
-            	auto tfGuessArray = take(&input, guessNumBar).array();
-            	_timeFrame = guessTimeFrame(tfGuessArray);
-            
-            	//as part of input range was consumed for TF guessing, chain guess buffer with the input range
-            	_input = inputRangeObject(chain(tfGuessArray, input));
-    	    }
+            static if(isArray!T)
+            {
+                _timeFrame = guessTimeFrame(input[0..min(guessNumBar, input.length)]);
+                _input = inputRangeObject(input);
+            }
+            else
+            {
+                auto tfGuessArray = take(&input, guessNumBar).array();
+                _timeFrame = guessTimeFrame(tfGuessArray);
+                
+                //as part of input range was consumed for TF guessing, chain guess buffer with the input range
+                _input = inputRangeObject(chain(tfGuessArray, input));
+            }
         }
         else
         {
