@@ -59,20 +59,11 @@ struct MarketData(T)
     if(isInputRange!T && is(ElementType!T == Bar))
 {
     enum guessNumBar = 10;
-    
+
     private InputRange!(Bar) _input;
-    private S.Symbol _symbol;
-    private TimeFrame _timeFrame;
 
-    @nogc @property @safe pure nothrow public auto symbol() const
-    {
-        return _symbol;
-    }
-
-    @nogc @property @safe pure nothrow auto timeFrame() const
-    {
-        return _timeFrame;
-    }
+    mixin property!(S.Symbol, "symbol");
+    mixin property!(TimeFrame, "timeFrame");
 
     @disable this();
 

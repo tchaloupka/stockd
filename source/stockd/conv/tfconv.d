@@ -25,10 +25,11 @@ private struct TimeFrameConv(T)
     private InputRange!(ElementType!T) _input;
     private uint _factor;
     private Bar currentBar;
-    private TimeFrame _targetTF;
-    private Symbol _symbol;
     private DateTime _lastWaitTime;
     private ubyte _eodHour;
+
+    mixin property!(Symbol, "symbol");
+    mixin property!(TimeFrame, "timeFrame");
 
     /**
      * Params:
@@ -56,18 +57,18 @@ private struct TimeFrameConv(T)
         //set target timeframe
         static if(__traits(compiles, input.timeFrame)) //reuse time frame from input
         {
-            _targetTF = input.timeFrame * factor;
+            _timeFrame = input.timeFrame * factor;
             _input = inputRangeObject(input);
         }
         else static if(isArray!T) //guess time frame from input
         {
-            _targetTF = guessTimeFrame(input[0..min(guessNumBar, input.length)]) * factor;
+            _timeFrame = guessTimeFrame(input[0..min(guessNumBar, input.length)]) * factor;
             _input = inputRangeObject(input);
         }
         else
         {
             auto tfGuessArray = take(&input, guessNumBar).array();
-            _targetTF = guessTimeFrame(tfGuessArray) * factor;
+            _timeFrame = guessTimeFrame(tfGuessArray) * factor;
             
             //as part of input range was consumed for TF guessing, chain guess buffer with the input range
             _input = inputRangeObject(chain(tfGuessArray, input));
@@ -78,16 +79,6 @@ private struct TimeFrameConv(T)
             //prepare first Bar
             this.popFront();
         }
-    }
-
-    @nogc @property pure nothrow auto timeFrame() const
-    {
-        return _targetTF;
-    }
-
-    @nogc @property pure nothrow auto symbol() const
-    {
-        return _symbol;
     }
 
     @property bool empty()
@@ -148,7 +139,7 @@ private struct TimeFrameConv(T)
 
         //filter out weekend bars from input
         //TODO: not sure if this should be here at all -> input validation in marketData range?
-        if(_targetTF.origin == Origin.day && _factor == 1 && (currentBar.time.dayOfWeek == DayOfWeek.sun || currentBar.time.dayOfWeek == DayOfWeek.sat))
+        if(_timeFrame.origin == Origin.day && _factor == 1 && (currentBar.time.dayOfWeek == DayOfWeek.sun || currentBar.time.dayOfWeek == DayOfWeek.sat))
         {
             //ignore this one and get next
             popFront();
@@ -158,7 +149,7 @@ private struct TimeFrameConv(T)
     /// gets next time we wait for from the current bar
     private DateTime nextValidTime(Bar bar)
     {
-        final switch(_targetTF.origin)
+        final switch(_timeFrame.origin)
         {
             case Origin.minute:
                 uint rest = bar.time.minute % _factor;
