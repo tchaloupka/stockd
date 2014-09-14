@@ -1,7 +1,7 @@
 module stockd.ta.truerange;
 
-import std.math;
-import stockd.defs.bar;
+import std.range;
+import stockd.defs;
 
 /**
  * True Range
@@ -22,63 +22,82 @@ import stockd.defs.bar;
  * than the current high (signaling a potential gap down or limit move) or the previous close is lower than 
  * the current low (signaling a potential gap up or limit move).
  */
-class TR
+auto trueRange(R)(R input)
+    if(isInputRange!R && is(ElementType!R == Bar))
 {
-    private double prevClose;
-    private bool first = true;
-    private double m1, m2, m3;
+    return TrueRange!R(input);
+}
 
-    this()
+/// dtto
+struct TrueRange(R)
+    if(isInputRange!R && is(ElementType!R == Bar))
+{
+    enum evalNext = `
+        _m1 = cur.high - cur.low;
+        _m2 = abs(cur.low - _prevClose);
+        _m3 = abs(cur.high - _prevClose);
+        _prevClose = cur.close;
+        
+        if(_m2 > _m1) _m1 = _m2;
+        if(_m3 > _m1) _m1 = _m3;`;
+
+    private double _prevClose;
+    private double _m1, _m2, _m3;
+
+    R _input;
+    
+    this(R input)
     {
-        // Constructor code
+        this._input = input;
+
+        _m1 = input.front.high - input.front.low;
+        _prevClose = input.front.close;
     }
-
-    pure nothrow double add(Bar value)
+    
+    int opApply(scope int delegate(double) func)
     {
-        m1 = value.high - value.low;
+        import std.math : abs;
+
+        int result;
+        double _prevClose = this._prevClose;
+        double _m1 = this._m1;
+        double _m2, _m3;
+
+        //send first
+        _input.popFront();
+        result = func(_m1);
+        if(result) return result;
         
-        if(first)
+        foreach(ref cur; _input)
         {
-            first = false;
+            mixin(evalNext);
+            result = func(_m1);
+            if(result) break;
         }
-        else
-        {
-            m2 = abs(value.low - prevClose);
-            m3 = abs(value.high - prevClose);
-            
-            if(m2 > m1) m1 = m2;
-            if(m3 > m1) m1 = m3;
-        }
-        
-        prevClose = value.close;
-        
-        return m1;
+        return result;
     }
-
-    static void evaluate(const ref Bar[] input, ref double[] output)
+    
+    @property bool empty()
     {
-        assert(input != null);
-        assert(output != null);
-        assert(input.length == output.length);
-        assert(input.length > 0);
+        return _input.empty;
+    }
+    
+    @property auto front()
+    {
+        return _m1;
+    }
+    
+    void popFront()
+    {
+        import std.math : abs;
 
-        double prevClose = input[0].close;
-        double m1, m2, m3;
-        
-        output[0] = input[0].high - input[0].low;
-        
-        for(size_t i=1; i<input.length; i++)
-        {
-            m1 = input[i].high - input[i].low;
-            m2 = abs(input[i].low - prevClose);
-            m3 = abs(input[i].high - prevClose);
-            
-            if(m2 > m1) m1 = m2;
-            if(m3 > m1) m1 = m3;
-            
-            prevClose = input[i].close;
-            output[i] = m1;
-        }
+        _input.popFront();
+
+        if(empty) return;
+
+        auto cur = _input.front(); //cache it
+
+        mixin(evalNext);
     }
 }
 
@@ -87,39 +106,40 @@ unittest
     import std.csv;
     import std.stdio;
     import std.datetime;
+    import std.math;
 
     struct Layout {double high; double low; double close;}
 
     auto strBars = r"48.7000;47.7900;48.1600
-48.7200;48.1400;48.6100
-48.9000;48.3900;48.7500
-48.8700;48.3700;48.6300
-48.8200;48.2400;48.7400
-49.0500;48.6350;49.0300
-49.2000;48.9400;49.0700
-49.3500;48.8600;49.3200
-49.9200;49.5000;49.9100
-50.1900;49.8700;50.1300
-50.1200;49.2000;49.5300
-49.6600;48.9000;49.5000
-49.8800;49.4300;49.7500
-50.1900;49.7250;50.0300
-50.3600;49.2600;50.3100
-50.5700;50.0900;50.5200
-50.6500;50.3000;50.4100
-50.4300;49.2100;49.3400
-49.6300;48.9800;49.3700
-50.3300;49.6100;50.2300
-50.2900;49.2000;49.2375
-50.1700;49.4300;49.9300
-49.3200;48.0800;48.4300
-48.5000;47.6400;48.1800
-48.3201;41.5500;46.5700
-46.8000;44.2833;45.4100
-47.8000;47.3100;47.7700
-48.3900;47.2000;47.7200
-48.6600;47.9000;48.6200
-48.7900;47.7301;47.8500";
+        48.7200;48.1400;48.6100
+        48.9000;48.3900;48.7500
+        48.8700;48.3700;48.6300
+        48.8200;48.2400;48.7400
+        49.0500;48.6350;49.0300
+        49.2000;48.9400;49.0700
+        49.3500;48.8600;49.3200
+        49.9200;49.5000;49.9100
+        50.1900;49.8700;50.1300
+        50.1200;49.2000;49.5300
+        49.6600;48.9000;49.5000
+        49.8800;49.4300;49.7500
+        50.1900;49.7250;50.0300
+        50.3600;49.2600;50.3100
+        50.5700;50.0900;50.5200
+        50.6500;50.3000;50.4100
+        50.4300;49.2100;49.3400
+        49.6300;48.9800;49.3700
+        50.3300;49.6100;50.2300
+        50.2900;49.2000;49.2375
+        50.1700;49.4300;49.9300
+        49.3200;48.0800;48.4300
+        48.5000;47.6400;48.1800
+        48.3201;41.5500;46.5700
+        46.8000;44.2833;45.4100
+        47.8000;47.3100;47.7700
+        48.3900;47.2000;47.7200
+        48.6600;47.9000;48.6200
+        48.7900;47.7301;47.8500";
 
     auto records = csvReader!Layout(strBars,';');
     Bar[] bars;
@@ -128,16 +148,18 @@ unittest
         bars ~= Bar(DateTime(2010, 1, 1, 1), r.close, r.high, r.low, r.close);
     }
 
-    double[] expected = [0.91000, 0.58000, 0.51000, 0.50000, 0.58000, 0.41500, 0.26000, 0.49000, 0.60000, 0.32000, 0.93000, 0.76000, 0.45000, 0.46500, 1.10000, 0.48000, 0.35000, 1.22000, 0.65000, 0.96000, 1.09000, 0.93250, 1.85000, 0.86000, 6.77010, 2.51670, 2.39000, 1.19000, 0.94000, 1.05990];
-    double[] eval = new double[expected.length];
+    double[] expected = [
+        0.91000, 0.58000, 0.51000, 0.50000, 0.58000, 0.41500, 0.26000, 0.49000, 
+        0.60000, 0.32000, 0.93000, 0.76000, 0.45000, 0.46500, 1.10000, 0.48000, 
+        0.35000, 1.22000, 0.65000, 0.96000, 1.09000, 0.93250, 1.85000, 0.86000, 
+        6.77010, 2.51670, 2.39000, 1.19000, 0.94000, 1.05990];
 
-    TR.evaluate(bars, eval);
+    auto range = trueRange(bars);
+    assert(isInputRange!(typeof(range)));
+    auto eval = range.array;
     assert(approxEqual(expected, eval));
 
-    auto tr = new TR();
-    for(int i=0; i<bars.length; i++)
-    {
-        assert(approxEqual(expected[i], tr.add(bars[i])));
-    }
+    auto wrapped = inputRangeObject(trueRange(bars));
+    eval = wrapped.array;
+    assert(approxEqual(expected, eval));
 }
-

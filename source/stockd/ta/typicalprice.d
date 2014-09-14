@@ -20,8 +20,6 @@ auto typicalPrice(R)(R input)
 struct TypicalPrice(R)
     if(isInputRange!R && is(ElementType!R == Bar))
 {
-    import std.stdio;
-    
     R _input;
     
     this(R input)
@@ -74,5 +72,9 @@ unittest
     auto range = typicalPrice(bars);
     assert(isInputRange!(typeof(range)));
     double[] evaluated = range.array;
+    assert(approxEqual(expected, evaluated));
+
+    auto wrapped = inputRangeObject(typicalPrice(bars));
+    evaluated = wrapped.array;
     assert(approxEqual(expected, evaluated));
 }
