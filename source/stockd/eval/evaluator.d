@@ -33,7 +33,7 @@ import stockd.ta;
 enum evaluatorGrammar = `
     Eval:
         #filter defs
-        FILTERLIST  <  (FILTER (:';' FILTER)+ / FILTER) :';'?
+        FILTERLIST  <  ((FILTER (:';' FILTER)+) / FILTER) :';'?
         FILTER      <  WITHPARAMS / SIMPLE
         WITHPARAMS  <  FUNC :"(" (FILTER / SIMPLE / PARAM) (:',' PARAM)? :")"
         SIMPLE      <  SIMPLEABLE (&',' / &';' / !. / :("()"))
@@ -54,7 +54,7 @@ enum evaluatorGrammar = `
         CCI         <- 'cci'
         BOLLINGER   <- 'bollinger'
         CURDAYOHL   <- 'curDayOHL'
-        HEIKENASHI  <- 'heikenashi'
+        HEIKENASHI  <- 'heikenAshi' / 'heikenashi'
         MACD        <- 'macd'
         MAX         <- 'max'
         MIN         <- 'min'
@@ -162,6 +162,14 @@ struct Evaluator(R, ParseTree def)
                 case "Eval.TRUERANGE": //true range
                     params ~= "TrueRange!R _indicator" ~ to!string(filterNum) ~ ";\n            ";
                     constructor ~= "    _indicator" ~ to!string(filterNum++) ~ " = trueRange(_input);\n            ";
+                    break;
+                case "Eval.AVG": //typical price
+                    params ~= "Average!R _indicator" ~ to!string(filterNum) ~ ";\n            ";
+                    constructor ~= "    _indicator" ~ to!string(filterNum++) ~ " = average(_input);\n            ";
+                    break;
+                case "Eval.HEIKENASHI": //typical price
+                    params ~= "HeikenAshi!R _indicator" ~ to!string(filterNum) ~ ";\n            ";
+                    constructor ~= "    _indicator" ~ to!string(filterNum++) ~ " = heikenAshi(_input);\n            ";
                     break;
                 case "Eval.FILTER":
                     //pass next to SIMLE / WITHPARAMS
@@ -296,4 +304,48 @@ unittest
 
     auto testEval = evaluator!(r"tr", typeof(bars))(bars);
     assert(approxEqual(expected, testEval.array));
+}
+
+/// Average price test
+unittest
+{
+    import std.stdio;
+    import std.math;
+    import stockd.data;
+    import stockd.defs;
+    
+    auto data = marketData([
+        bar!"20000101;2;4;1;3;100",
+        bar!"20000101;10;20;5;15;100",
+        bar!"20000101;0.1;1;0.1;0.6;100"
+    ]);
+    
+    enum expected = [2.5, 12.5, 0.45];
+    auto testEval = evaluator!(r"avg()", typeof(data))(data);
+    assert(approxEqual(expected, testEval.array));
+}
+
+/// HeikenAshi bar test
+unittest
+{
+    import std.stdio;
+    import stockd.data;
+    import stockd.defs;
+
+    Bar[] data = 
+    [
+        bar!"20000101;58.67;58.82;57.03;57.73;100",
+        bar!"20000101;57.46;57.72;56.21;56.27;100",
+        bar!"20000101;56.37;56.88;55.35;56.81;100"
+    ];
+    
+    Bar[] expected = 
+    [
+        bar!"20000101;58.2;58.82;57.03;58.0625;100",
+        bar!"20000101;58.13125;58.13125;56.21;56.915;100",
+        bar!"20000101;57.523125;57.523125;55.35;56.3525;100"
+    ];
+
+    auto testEval = evaluator!(r"heikenAshi()", typeof(data))(data);
+    assert(equal(expected, testEval.array));
 }

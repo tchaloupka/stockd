@@ -1,8 +1,7 @@
 module stockd.ta.heikenashi;
 
-import std.algorithm;
-import std.stdio;
 import stockd.defs.bar;
+import std.range;
 
 /**
  * Heikin-Ashi Price Bars
@@ -25,110 +24,113 @@ import stockd.defs.bar;
  * HaLow = Min(Low, HaOpen, HaClose)
  *      = the lowest value in the range 
  */
-class HeikenAshi
+auto heikenAshi(R)(R input)
+    if(isInputRange!R && is(ElementType!R == Bar))
 {
-    private Bar prevBar = Bar();
-    private bool first = true;
-    private double open, close;
+    return HeikenAshi!R(input);
+}
 
-    this()
+/// dtto
+struct HeikenAshi(R)
+    if(isInputRange!R && is(ElementType!R == Bar))
+{
+    enum evalNext = `
+        _close = (cur.open + cur.high + cur.low + cur.close) * 0.25;
+        _front = Bar(
+            cur.time,
+            _open = ((_front.open + _front.close) * 0.5),
+            max(cur.high, _open, _close),
+            min(cur.low, _open, _close),
+            _close,
+            cur.volume);`;
+
+    R _input;
+    private Bar _front;
+    private double _open, _close;
+    
+    this(R input)
     {
-        // Constructor code
+        this._input = input;
+
+        auto first = input.front;
+
+        _front = Bar(
+            first.time,
+            (first.open + first.close) * 0.5,
+            first.high,
+            first.low,
+            (first.open + first.high + first.low + first.close) * 0.25,
+            first.volume);
     }
-
-    pure nothrow Bar Add(Bar value)
+    
+    int opApply(scope int delegate(ref Bar) func)
     {
-        if(first)
-        {
-            //return input bar
-            prevBar = Bar(
-                value.time,
-                (value.open + value.close) * 0.5, // Calculate the close
-                value.high,
-                value.low,
-                (value.open + value.high + value.low + value.close) * 0.25, // Calculate the close
-                value.volume);
-            first = false;
-        }
-        else
-        {
-            close = (value.open + value.high + value.low + value.close) * 0.25; // Calculate the close
-            prevBar = Bar(
-                value.time,
-                open = ((prevBar.open + prevBar.close) * 0.5), // Calculate the open
-                max(value.high, open, close), // Calculate the high
-                min(value.low, open, close), // Calculate the low
-                close,
-                value.volume);
-        }
+        import std.algorithm : max, min;
 
-        return prevBar;
+        int result;
+        Bar _front = this._front;
+        double _open, _close;
+
+        //send first
+        _input.popFront();
+        result = func(_front);
+        if(result) return result;
+        
+        foreach(ref cur; _input)
+        {
+            mixin(evalNext);
+            result = func(_front);
+            if(result) break;
+        }
+        return result;
     }
-
-    static void evaluate(const ref Bar[] input, ref Bar[] output)
+    
+    @property bool empty()
     {
-        assert(input != null);
-        assert(output != null);
-        assert(input.length == output.length);
-        assert(input.length > 0);
+        return _input.empty;
+    }
+    
+    @property auto front()
+    {
+        return _front;
+    }
+    
+    void popFront()
+    {
+        import std.algorithm : max, min;
 
-        double open, close;
+        _input.popFront();
 
-        //return input bar
-        output[0] = Bar(
-            input[0].time,
-            (input[0].open + input[0].close) * 0.5, // Calculate the close
-            input[0].high,
-            input[0].low,
-            (input[0].open + input[0].high + input[0].low + input[0].close) * 0.25, // Calculate the close
-            input[0].volume);
-
-        for(size_t i=1; i<input.length; i++)
-        {
-            close = (input[i].open + input[i].high + input[i].low + input[i].close) * 0.25; // Calculate the close
-            output[i] = Bar(
-                input[i].time,
-                open = ((output[i-1].open + output[i-1].close) * 0.5), // Calculate the open
-                max(input[i].high, open, close), // Calculate the high
-                min(input[i].low, open, close), // Calculate the low
-                close,
-                input[i].volume);
-        }
+        if(empty) return;
+        
+        auto cur = _input.front(); //cache it
+        
+        mixin(evalNext);
     }
 }
 
 unittest
 {
-    import std.datetime;
-    import std.math;
-
     Bar[] bars = 
     [
-        Bar(DateTime(2000, 1, 1), 58.67, 58.82, 57.03, 57.73, 100),
-        Bar(DateTime(2000, 1, 1), 57.46, 57.72, 56.21, 56.27, 100),
-        Bar(DateTime(2000, 1, 1), 56.37, 56.88, 55.35, 56.81, 100)
+        bar!"20000101;58.67;58.82;57.03;57.73;100",
+        bar!"20000101;57.46;57.72;56.21;56.27;100",
+        bar!"20000101;56.37;56.88;55.35;56.81;100"
     ];
 
     Bar[] expected = 
     [
-        Bar(DateTime(2000, 1, 1), 58.2, 58.82, 57.03, 58.0625, 100),
-        Bar(DateTime(2000, 1, 1), 58.13125, 58.13125, 56.21, 56.915, 100),
-        Bar(DateTime(2000, 1, 1), 57.523125, 57.523125, 55.35, 56.3525, 100)
+        bar!"20000101;58.2;58.82;57.03;58.0625;100",
+        bar!"20000101;58.13125;58.13125;56.21;56.915;100",
+        bar!"20000101;57.523125;57.523125;55.35;56.3525;100"
     ];
-    auto eval = new Bar[bars.length];
 
-    HeikenAshi.evaluate(bars, eval);
-
-    auto ha = new HeikenAshi();
-    for(int i=0; i<bars.length; i++)
-    {
-        assert(expected[i].time == eval[i].time);
-        assert(expected[i].volume == eval[i].volume);
-        assert(approxEqual(expected[i].ohlc, eval[i].ohlc));
-
-        auto hab = ha.Add(bars[i]);
-        assert(expected[i].time == hab.time);
-        assert(expected[i].volume == hab.volume);
-        assert(approxEqual(expected[i].ohlc, hab.ohlc));
-    }
+    auto range = heikenAshi(bars);
+    assert(isInputRange!(typeof(range)));
+    auto eval = range.array;
+    assert(equal(expected, eval));
+    
+    auto wrapped = inputRangeObject(heikenAshi(bars));
+    eval = wrapped.array;
+    assert(equal(expected, eval));
 }

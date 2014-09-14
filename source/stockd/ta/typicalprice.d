@@ -17,6 +17,7 @@ auto typicalPrice(R)(R input)
     return TypicalPrice!R(input);
 }
 
+/// dtto
 struct TypicalPrice(R)
     if(isInputRange!R && is(ElementType!R == Bar))
 {
@@ -46,7 +47,8 @@ struct TypicalPrice(R)
 
     @property auto front()
     {
-        return (_input.front.high + _input.front.low + _input.front.close)/3;
+        auto cur = _input.front;
+        return (cur.high + cur.low + cur.close)/3;
     }
 
     void popFront()

@@ -1,33 +1,53 @@
 module stockd.ta.avg;
 
+import std.range;
 import stockd.defs.bar;
 
-/**
- * Evaluates average of all bar prices (OHLC)
- */
-class Avg
+
+/// Evaluates average of all bar prices (OHLC)
+auto average(R)(R input)
+    if(isInputRange!R && is(ElementType!R == Bar))
 {
-    this()
+    return Average!R(input);
+}
+
+/// dtto
+struct Average(R)
+    if(isInputRange!R && is(ElementType!R == Bar))
+{
+    R _input;
+    
+    this(R input)
     {
-        // Constructor code
+        this._input = input;
     }
-
-    pure nothrow double Add(Bar value)
+    
+    int opApply(scope int delegate(double) func)
     {
-        return (value.open + value.high + value.low + value.close)*0.25;
-    }
-
-    static void evaluate(const ref Bar[] input, ref double[] output)
-    {
-        assert(input != null);
-        assert(output != null);
-
-        Bar iBar;
-        for(size_t i = 0; i<input.length; i++)
+        int result;
+        
+        foreach(ref cur; _input)
         {
-            iBar = input[i];
-            output[i] = (iBar.open + iBar.high + iBar.low + iBar.close)*0.25;
+            result = func((cur.open + cur.high + cur.low + cur.close)*0.25);
+            if(result) break;
         }
+        return result;
+    }
+    
+    @property bool empty()
+    {
+        return _input.empty;
+    }
+    
+    @property auto front()
+    {
+        auto cur = _input.front;
+        return (cur.open + cur.high + cur.low + cur.close)*0.25;
+    }
+    
+    void popFront()
+    {
+        _input.popFront();
     }
 }
 
@@ -39,20 +59,18 @@ unittest
 
     Bar[] bars = 
     [
-        Bar(DateTime(2000, 1, 1), 2, 4, 1, 3, 100),
-        Bar(DateTime(2000, 1, 1), 10, 20, 5, 15, 100),
-        Bar(DateTime(2000, 1, 1), 0.1, 1, 0.1, 0.6, 100)
+        bar!"20000101;2;4;1;3;100",
+        bar!"20000101;10;20;5;15;100",
+        bar!"20000101;0.1;1;0.1;0.6;100"
     ];
-
+    
     double[] expected = [2.5, 12.5, 0.45];
-    double[] evaluated = new double[3];
-
-    Avg.evaluate(bars, evaluated);
+    auto range = average(bars);
+    assert(isInputRange!(typeof(range)));
+    double[] evaluated = range.array;
     assert(approxEqual(expected, evaluated));
-
-    auto avg = new Avg();
-    for(int i=0; i<bars.length; i++)
-    {
-        assert(approxEqual(expected[i], avg.Add(bars[i])));
-    }
+    
+    auto wrapped = inputRangeObject(average(bars));
+    evaluated = wrapped.array;
+    assert(approxEqual(expected, evaluated));
 }
