@@ -1,33 +1,59 @@
 module stockd.ta.typicalprice;
 
 import stockd.defs.bar;
+import std.range;
 
 /**
  * Typical Price
  * 
  * Simple indicator calculated as:
- * TP = (High + Low + Close)/3
+ * TypicalPrice = (High + Low + Close)/3
  * 
  * Opposite to Average price, the Open price is ignored
  */
-struct TP
+auto typicalPrice(R)(R input)
+    if(isInputRange!R && is(ElementType!R == Bar))
 {
-    pure nothrow double Add(Bar value)
+    return TypicalPrice!R(input);
+}
+
+struct TypicalPrice(R)
+    if(isInputRange!R && is(ElementType!R == Bar))
+{
+    import std.stdio;
+    
+    R _input;
+    
+    this(R input)
     {
-        return (value.high + value.low + value.close)/3;
+        this._input = input;
     }
     
-    static void evaluate(const ref Bar[] input, ref double[] output)
+    int opApply(scope int delegate(double) func)
     {
-        assert(input != null);
-        assert(output != null);
-        
-        Bar iBar;
-        for(size_t i = 0; i<input.length; i++)
+        int result;
+
+        foreach(ref bar; _input)
         {
-            iBar = input[i];
-            output[i] = (iBar.high + iBar.low + iBar.close)/3;
+            result = func((bar.high + bar.low + bar.close)/3);
+            if(result) break;
         }
+        return result;
+    }
+
+    @property bool empty()
+    {
+        return _input.empty;
+    }
+
+    @property auto front()
+    {
+        return (_input.front.high + _input.front.low + _input.front.close)/3;
+    }
+
+    void popFront()
+    {
+        _input.popFront();
     }
 }
 
@@ -45,14 +71,8 @@ unittest
     ];
     
     double[] expected = [2.666667, 13.33333, 0.566666];
-    double[] evaluated = new double[3];
-    
-    TP.evaluate(bars, evaluated);
+    auto range = typicalPrice(bars);
+    assert(isInputRange!(typeof(range)));
+    double[] evaluated = range.array;
     assert(approxEqual(expected, evaluated));
-    
-    auto tp = new TP();
-    for(int i=0; i<bars.length; i++)
-    {
-        assert(approxEqual(expected[i], tp.Add(bars[i])));
-    }
 }

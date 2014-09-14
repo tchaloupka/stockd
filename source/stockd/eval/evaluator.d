@@ -22,17 +22,21 @@
  */
 module stockd.eval.evaluator;
 
-import pegged.grammar;
 import std.traits;
+import std.range;
+
+import pegged.grammar;
 import stockd.data;
+import stockd.defs;
+import stockd.ta;
 
 enum evaluatorGrammar = `
     Eval:
         #filter defs
-        FILTERLIST  <  FILTER (:';' FILTER)*
-        FILTER      <- WITHPARAMS / SIMPLE
+        FILTERLIST  <  (FILTER (:';' FILTER)+ / FILTER) :';'?
+        FILTER      <  WITHPARAMS / SIMPLE
         WITHPARAMS  <  FUNC :"(" (FILTER / SIMPLE / PARAM) (:',' PARAM)? :")"
-        SIMPLE      <- SIMPLEABLE (&',' / &';' / !. / :("()"))
+        SIMPLE      <  SIMPLEABLE (&',' / &';' / !. / :("()"))
         
         #functions with params
         FUNC        <- ATR / SMA / EMA / CCI / BOLLINGER / MACD / MAX / MIN / MEDIAN / STDDEV / STOCHASTIC
@@ -81,11 +85,11 @@ unittest
 {
     import std.stdio;
 
-    auto parsedTree = Eval(r"sma(atr(14), 10); ema(1.2); cci(); tr; sma");
+    auto parsedTree = Eval(r"sma(atr(14), 10); ema(1.2); cci(); tr; sma;");
     assert(parsedTree.successful);
     assert(parsedTree.matches == ["sma", "atr", "14", "10", "ema", "1.2", "cci", "tr", "sma"]);
 
-    parsedTree = Eval(r"typical()");
+    parsedTree = Eval(r"typical();");
     assert(parsedTree.successful);
 
     parsedTree = Eval(r"sma");
@@ -99,52 +103,119 @@ unittest
 }
 
 /**
- * Initializes evaluator
+ * Initializes compile time evaluator
  */
 auto evaluator(string def, R)(R input)
-    if(__traits(isSame, TemplateOf!R, MarketData))
+    if(isInputRange!R && is(ElementType!R == Bar))
 {
     enum peggedEval = Eval(def);
-    return Evaluator!R(peggedEval, input);
+    return Evaluator!(R, peggedEval)(input);
 }
 
 /// Evaluator to evaluate specified chained filter
-struct Evaluator(R)
-    if(__traits(isSame, TemplateOf!R, MarketData))
+struct Evaluator(R, ParseTree def)
+    if(isInputRange!R && is(ElementType!R == Bar))
 {
-    ParseTree _parseTree;
-    R _input;
 
-    this(ParseTree p, R input)
+    /// create Evaluator implementation
+    static auto evaluatorImpl(R, ParseTree def)()
     {
-        import stockd.defs.common;
-        import std.stdio;
+        string params = `
+            R _input;
+            `;
+        
+        string constructor = `
+            this(R input)
+            {
+                this._input = input;
+            `;
+        
+        string rangeImpl = `
+            void popFront()
+            {
+                _expr.popFront();
+            }
 
-        this._parseTree = p;
-        this._input = input;
+            @property bool empty()
+            {
+                return _expr.empty;
+            }
 
-        debug trustedPureDebugCall!writeln(p);
+            @property auto ref front()
+            {
+                return _expr.front;
+            }
+            `;
+
+        int filterNum;
+
+        void parseTree(ParseTree tr)
+        {
+            import std.conv;
+
+            switch(tr.name)
+            {
+                case "Eval.TYPICALP": //typical price
+                    params ~= "TypicalPrice!R _filter" ~ to!string(filterNum) ~ ";\n            ";
+                    constructor ~= "    _filter" ~ to!string(filterNum++) ~ " = typicalPrice(_input);\n            ";
+                    break;
+                case "Eval.FILTER":
+                    //pass next to SIMLE / WITHPARAMS
+                    assert(tr.children.length == 1);
+                    parseTree(tr.children[0]);
+                    break;
+                case "Eval.SIMPLEABLE":
+                    //pass next to filter type
+                    assert(tr.children.length == 1);
+                    parseTree(tr.children[0]);
+                    break;
+                case "Eval.SIMPLE":
+                    //pass next to SIMPLEABLE
+                    assert(tr.children.length == 1);
+                    parseTree(tr.children[0]);
+                    break;
+                case "Eval.WITHPARAMS":
+                    assert(0, "Not implemented yet!");
+                    //break;
+                default:
+                    assert(0, "Unexpected element " ~ tr.name);
+            }
+        }
+
+        //add all filters
+        assert(def.name == "Eval");
+        assert(def.children.length == 1);
+        assert(def.children[0].name == "Eval.FILTERLIST");
+        foreach(f; def.children[0].children)
+        {
+            assert(f.name == "Eval.FILTER");
+
+            parseTree(f);
+        }
+
+        //close constructor
+        constructor ~= '}';
+
+        //create combined filter for output
+        assert(filterNum > 0);
+        if(filterNum == 1)
+        {
+            params ~= "alias _filter0 _expr;";
+        }
+        else assert(0, "Not implemented yet!");
+
+        return params ~ '\n' ~ constructor ~ '\n' ~ rangeImpl;
     }
 
-    void popFront()
-    {
-        _input.popFront();
-    }
+    pragma(msg, evaluatorImpl!(R, def));
 
-    @property bool empty()
-    {
-        return _input.empty;
-    }
-
-    @property auto ref front()
-    {
-        return _input.front;
-    }
+    mixin(evaluatorImpl!(R, def));
 }
 
 unittest
 {
     import std.stdio;
+    import std.math;
     import stockd.data;
     import stockd.defs;
 
@@ -157,13 +228,6 @@ unittest
     ]);
     
     enum expected = [2.666667, 13.33333, 0.566666];
-
     auto testEval = evaluator!(r"typical()", typeof(data))(data);
-
-    foreach(res; testEval)
-    {
-        //assert(res
-    }
-
-    writeln(data);
+    assert(approxEqual(expected, testEval.array));
 }
