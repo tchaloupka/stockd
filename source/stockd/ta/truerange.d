@@ -1,4 +1,4 @@
-module stockd.ta.tr;
+module stockd.ta.truerange;
 
 import std.math;
 import stockd.defs.bar;

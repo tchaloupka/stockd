@@ -23,6 +23,6 @@ mixin template property(T, string name, T init)
 {
     try
     {
-        debug return fn(args);
+        if(!__ctfe) debug return fn(args);
     }catch{}
 }

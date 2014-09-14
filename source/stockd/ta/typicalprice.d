@@ -1,4 +1,4 @@
-module stockd.ta.tp;
+module stockd.ta.typicalprice;
 
 import stockd.defs.bar;
 
@@ -10,13 +10,8 @@ import stockd.defs.bar;
  * 
  * Opposite to Average price, the Open price is ignored
  */
-class TP
+struct TP
 {
-    this()
-    {
-        // Constructor code
-    }
-
     pure nothrow double Add(Bar value)
     {
         return (value.high + value.low + value.close)/3;
@@ -44,9 +39,9 @@ unittest
     
     Bar[] bars = 
     [
-        Bar(DateTime(2000, 1, 1), 2, 4, 1, 3, 100),
-        Bar(DateTime(2000, 1, 1), 10, 20, 5, 15, 100),
-        Bar(DateTime(2000, 1, 1), 0.1, 1, 0.1, 0.6, 100)
+        bar!"20000101;2;4;1;3;100",
+        bar!"20000101;10;20;5;15;100",
+        bar!"20000101;0.1;1;0.1;0.6;100"
     ];
     
     double[] expected = [2.666667, 13.33333, 0.566666];

@@ -14,5 +14,5 @@ public import stockd.ta.min;
 public import stockd.ta.sma;
 public import stockd.ta.stddev;
 public import stockd.ta.stochastic;
-public import stockd.ta.tp;
-public import stockd.ta.tr;
+public import stockd.ta.typicalprice;
+public import stockd.ta.truerange;

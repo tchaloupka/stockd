@@ -6,6 +6,7 @@
     "authors": [ "Tomáš Chaloupka" ],
     "license": "BSL-1.0",
     "dependencies": {
+        "pegged": {"version": "~master"}
     },
     "targetType": "library",
     "subPackages": [
