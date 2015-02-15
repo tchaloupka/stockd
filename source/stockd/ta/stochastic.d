@@ -40,9 +40,8 @@ auto stochastic(R)(R input, ushort period = 14, ushort kSmooth = 3, ushort dSmoo
 struct Stochastic(R)
     if(isInputRange!R && is(ElementType!R == Bar))
 {
-    private double lastKSum = 0, lastDSum = 0;
-    private double prevFastK = 50;
-    private R input;
+    private R _input;
+    private double _prevFastK = 50;
 
     mixin MinMax!false maxeval;
     mixin MinMax!true mineval;
@@ -60,26 +59,26 @@ struct Stochastic(R)
         kSmooth.initialize(kSmoothPeriod);
         dSmooth.initialize(dSmoothPeriod);
 
-        this.input = input;
+        this._input = input;
     }
 
     @property bool empty()
     {
-        return input.empty;
+        return _input.empty;
     }
     
     @property auto front()
     {
-        auto val = input.front;
+        auto val = _input.front;
         double min = mineval.eval(val.low);
         double max = maxeval.eval(val.high);
         
         double nom = val.close - min;
         double den = max - min;
         
-        prevFastK = den < 0.000000000001 ? prevFastK : 100 * nom / den;
+        _prevFastK = den < 0.000000000001 ? _prevFastK : 100 * nom / den;
         
-        double k = kSmooth.eval(prevFastK);
+        double k = kSmooth.eval(_prevFastK);
         double d = dSmooth.eval(k);
         
         return tuple(k, d);
@@ -87,7 +86,7 @@ struct Stochastic(R)
 
     void popFront()
     {
-        input.popFront();
+        _input.popFront();
     }
 }
 

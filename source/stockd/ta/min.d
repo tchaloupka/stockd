@@ -17,27 +17,27 @@ struct Min(R)
     if(isInputRange!R && is(ElementType!R == double))
 {
     mixin MinMax!(true) min;
-    private R input;
+    private R _input;
 
     this(R input, ushort period = 14)
     {
         min.initialize(period);
-        this.input = input;
+        this._input = input;
     }
 
     @property bool empty()
     {
-        return input.empty;
+        return _input.empty;
     }
     
     @property auto front()
     {
-        return min.eval(input.front);
+        return min.eval(_input.front);
     }
 
     void popFront()
     {
-        input.popFront();
+        _input.popFront();
     }
 }
 

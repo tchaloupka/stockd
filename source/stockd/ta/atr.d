@@ -3,6 +3,7 @@ module stockd.ta.atr;
 import std.math;
 import std.range;
 import stockd.defs.bar;
+import stockd.ta.templates;
 
 /**
  * Average true range (ATR)
@@ -27,67 +28,51 @@ auto atr(R)(R input, ushort period = 14)
 struct ATR(R)
     if(isInputRange!R && is(ElementType!R == Bar))
 {
-    private ushort period;
-    private ushort lPeriod;
-    private double prevAtr = 0;
-    private double prevClose = 0;
-    private ushort idx;
-    private double m1, m2, m3;
+    private ushort _period;
+    private ushort _lPeriod;
+    private ushort _idx = 0;
+    private double _prevAtr = double.nan;
+    private R _input;
 
-    R input;
+    mixin TrueRange tr;
     
     this(R input, ushort period = 14)
     {
         assert(period > 0);
 
-        this.input = input;
-        this.period = period;
-        this.lPeriod = cast(ushort)(period - 1);
+        this._input = input;
+        this._period = period;
+        this._lPeriod = cast(ushort)(period - 1);
     }
     
     @property bool empty()
     {
-        return input.empty;
+        return _input.empty;
     }
     
     @property auto front()
     {
-        auto bar = input.front;
+        auto bar = _input.front;
 
-        m1 = bar.high - bar.low;
-        
-        if(idx == 0)
+        double nextTR = tr.eval(bar);
+
+        if(_idx == 0)
         {
-            prevAtr = m1;
-            idx++;
+            _prevAtr = nextTR;
         }
         else
         {
-            m2 = abs(bar.low - prevClose);
-            m3 = abs(bar.high - prevClose);
-            
-            if(m2 > m1) m1 = m2;
-            if(m3 > m1) m1 = m3;
-            
-            if(idx < period)
-            {
-                prevAtr = (prevAtr * idx + m1) / (idx + 1);
-                idx++;
-            }
-            else
-            {
-                prevAtr = (prevAtr * lPeriod + m1) / period;
-            }
+            if(_idx < _period) _prevAtr = (_prevAtr * _idx + nextTR) / (_idx + 1);
+            else _prevAtr = (_prevAtr * _lPeriod + nextTR) / _period;
         }
-        
-        prevClose = bar.close;
-        
-        return prevAtr;
+
+        return _prevAtr;
     }
     
     void popFront()
     {
-        input.popFront();
+        _idx++;
+        _input.popFront();
     }
 }
 

@@ -15,7 +15,7 @@ auto average(R)(R input)
 struct Average(R)
     if(isInputRange!R && is(ElementType!R == Bar))
 {
-    R _input;
+    private R _input;
     
     this(R input)
     {

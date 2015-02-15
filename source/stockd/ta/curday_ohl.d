@@ -20,12 +20,12 @@ auto curDayOHL(R)(R input, TimeOfDay sessionStart)
 struct CurrentDayOHL(R)
     if(isInputRange!R && is(ElementType!R == Bar))
 {
-    private TimeOfDay sessionStart;
-    private DateTime lastTime = DateTime.min();
-    private double curOpen;
-    private double curHigh;
-    private double curLow;
-    private R input;
+    private TimeOfDay _sessionStart;
+    private DateTime _lastTime = DateTime.min();
+    private double _curOpen;
+    private double _curHigh;
+    private double _curLow;
+    private R _input;
 
     /**
      * Params:
@@ -33,37 +33,37 @@ struct CurrentDayOHL(R)
      */
     this(R input, TimeOfDay sessionStart)
     {
-        this.sessionStart = sessionStart;
-        this.input = input;
+        this._sessionStart = sessionStart;
+        this._input = input;
     }
 
     @property bool empty()
     {
-        return input.empty;
+        return _input.empty;
     }
     
     @property auto front()
     {
-        auto value = input.front;
+        auto value = _input.front;
 
-        if(isNextSession(lastTime, value.time, sessionStart))
+        if(isNextSession(_lastTime, value.time, _sessionStart))
         {
-            curOpen = value.open;
-            curHigh = value.high;
-            curLow = value.low;
+            _curOpen = value.open;
+            _curHigh = value.high;
+            _curLow = value.low;
         }
         else
         {
-            if(curHigh < value.high) curHigh = value.high;
-            if(curLow > value.low) curLow = value.low;
+            if(_curHigh < value.high) _curHigh = value.high;
+            if(_curLow > value.low) _curLow = value.low;
         }
         
-        return tuple(curOpen, curHigh, curLow);
+        return tuple(_curOpen, _curHigh, _curLow);
     }
 
     void popFront()
     {
-        input.popFront();
+        _input.popFront();
     }
 }
 

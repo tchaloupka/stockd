@@ -21,7 +21,7 @@ auto median(R)(R input, ushort period = 14)
 struct Median(R)
     if(isInputRange!R && is(ElementType!R == Bar))
 {
-    private R input;
+    private R _input;
 
     mixin MinMax!(true) min;
     mixin MinMax!(false) max;
@@ -30,24 +30,24 @@ struct Median(R)
     {
         min.initialize(period);
         max.initialize(period);
-        this.input = input;
+        this._input = input;
     }
 
     @property bool empty()
     {
-        return input.empty;
+        return _input.empty;
     }
     
     @property auto front()
     {
-        auto val = input.front;
+        auto val = _input.front;
 
         return (max.eval(val.high) + min.eval(val.low))/2;
     }
 
     void popFront()
     {
-        input.popFront();
+        _input.popFront();
     }
 }
 

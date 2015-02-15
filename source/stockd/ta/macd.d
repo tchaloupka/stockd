@@ -46,7 +46,7 @@ struct MACD(R)
     mixin Ema slow;
     mixin Ema smooth;
 
-    private R input;
+    private R _input;
     
     /**
      * Constructor
@@ -58,7 +58,7 @@ struct MACD(R)
         assert(fastPeriod < slowPeriod);
         assert(smoothPeriod > 0);
 
-        this.input = input;
+        this._input = input;
         fast.initialize(fastPeriod);
         slow.initialize(slowPeriod);
         smooth.initialize(smoothPeriod);
@@ -66,7 +66,7 @@ struct MACD(R)
 
     @property bool empty()
     {
-        return input.empty;
+        return _input.empty;
     }
     
     /**
@@ -80,7 +80,7 @@ struct MACD(R)
     //pure nothrow void add(double value, out double macd, out double signal, out double hist)
     @property auto front()
     {
-        auto value = input.front;
+        auto value = _input.front;
         double f = fast.eval(value);
         double s = slow.eval(value);
         
@@ -93,7 +93,7 @@ struct MACD(R)
 
     void popFront()
     {
-        input.popFront();
+        _input.popFront();
     }
 }
 

@@ -2,6 +2,7 @@ module stockd.ta.truerange;
 
 import std.range;
 import stockd.defs;
+import tmp = stockd.ta.templates;
 
 /**
  * True Range
@@ -32,16 +33,12 @@ auto trueRange(R)(R input)
 struct TrueRange(R)
     if(isInputRange!R && is(ElementType!R == Bar))
 {
-    private double _prevClose;
-    private double _m1, _m2, _m3;
     private R _input;
+    mixin tmp.TrueRange tr;
     
     this(R input)
     {
         this._input = input;
-
-        _m1 = input.front.high - input.front.low;
-        _prevClose = input.front.close;
     }
     
     @property bool empty()
@@ -51,26 +48,12 @@ struct TrueRange(R)
     
     @property auto front()
     {
-        return _m1;
+        return tr.eval(_input.front);
     }
     
     void popFront()
     {
-        import std.math : abs;
-
         _input.popFront();
-
-        if(empty) return;
-
-        auto cur = _input.front(); //cache it
-
-        _m1 = cur.high - cur.low;
-        _m2 = abs(cur.low - _prevClose);
-        _m3 = abs(cur.high - _prevClose);
-        _prevClose = cur.close;
-        
-        if(_m2 > _m1) _m1 = _m2;
-        if(_m3 > _m1) _m1 = _m3;
     }
 }
 
@@ -80,6 +63,8 @@ unittest
     import std.stdio;
     import std.datetime;
     import std.math;
+
+    writeln(">> TrueRange tests <<");
 
     struct Layout {double high; double low; double close;}
 
@@ -135,4 +120,6 @@ unittest
     auto wrapped = inputRangeObject(trueRange(bars));
     eval = wrapped.array;
     assert(approxEqual(expected, eval));
+
+    writeln(">> TrueRange tests OK <<");
 }

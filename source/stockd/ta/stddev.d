@@ -35,28 +35,28 @@ auto stddev(R)(R input, ushort period = 14)
 struct StdDev(R)
     if(isInputRange!R && is(ElementType!R == double))
 {
-    private R input;
+    private R _input;
     mixin tmp.StdDev stdd;
 
     this(R input, ushort period = 14)
     {
         stdd.initialize(period);
-        this.input = input;
+        this._input = input;
     }
 
     @property bool empty()
     {
-        return input.empty;
+        return _input.empty;
     }
     
     @property auto front()
     {
-        return stdd.eval(input.front);
+        return stdd.eval(_input.front);
     }
 
     void popFront()
     {
-        input.popFront();
+        _input.popFront();
     }
 }
 

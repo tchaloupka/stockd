@@ -22,7 +22,7 @@ struct Ema(R, bool sma = true)
     if(isInputRange!R && is(ElementType!R == double))
 {
     mixin tmp.Ema!(sma) ema;
-    private R input;
+    private R _input;
 
     /**
      * Params:
@@ -32,22 +32,22 @@ struct Ema(R, bool sma = true)
     this(R input, ushort period = 12)
     {
         ema.initialize(period);
-        this.input = input;
+        this._input = input;
     }
 
     @property bool empty()
     {
-        return input.empty;
+        return _input.empty;
     }
     
     @property auto front()
     {
-        return ema.eval(input.front);
+        return ema.eval(_input.front);
     }
 
     void popFront()
     {
-        input.popFront();
+        _input.popFront();
     }
 }
 

@@ -43,67 +43,38 @@ auto cci(R)(R input, ushort period = 14)
 struct CCI(R)
     if(isInputRange!R && is(ElementType!R == Bar))
 {
-    private ushort period;
-    private bool isFull;
-    private double lastSum = 0;
-    private ushort idx;
-    private double[] buffer;
-    private R input;
+    mixin Sma sma;
+    private R _input;
 
     this(R input, ushort period = 14)
     {
-        this.period = period;
-        this.buffer = new double[period];
-        this.input = input;
+        sma.initialize(period);
+        this._input = input;
     }
 
     @property bool empty()
     {
-        return input.empty;
+        return _input.empty;
     }
     
     @property auto front()
     {
-        auto value = input.front;
+        auto value = _input.front;
 
         double typical = (value.high + value.low + value.close)/3;
-        double sma = 0;
-        
-        //get SMA
-        if(!isFull)
-        {
-            buffer[idx++] = typical;
-            lastSum += typical;
-            
-            if(idx == period)
-            {
-                idx = 0;
-                isFull = true;
-                sma = lastSum / period;
-            }
-            else sma = lastSum/(idx);
-        }
-        else
-        {
-            lastSum -= buffer[idx];
-            buffer[idx++] = typical;
-            lastSum += typical;
-            if(idx == period) idx = 0;
-            
-            sma = lastSum / period;
-        }
+        double avg = sma.eval(typical);
         
         double mean = 0;
-        int len = isFull ? period : idx;
-        for (int i = len - 1; i >= 0; i--) { mean += abs(buffer[i] - sma); }
+        int len = _isFull ? _period : _idx;
+        for (int i = len - 1; i >= 0; i--) { mean += abs(_buffer[i] - avg); }
         mean = mean / len;
         
-        return (typical - sma) / (mean == 0 ? 1 : (0.015 * mean));
+        return (typical - avg) / (mean == 0 ? 1 : (0.015 * mean));
     }
 
     void popFront()
     {
-        input.popFront();
+        _input.popFront();
     }
 }
 

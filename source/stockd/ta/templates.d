@@ -37,49 +37,49 @@ module stockd.ta.templates;
  */ 
 mixin template Ema(bool useSma = true)
 {
-    private double m1, m2;
-    private bool hasVal;
-    private ushort idx;
-    private double lastVal = 0;
-    private ushort period;
+    private double _m1, _m2;
+    private bool _hasVal;
+    private ushort _idx;
+    private double _lastVal = 0;
+    private ushort _period;
 
     void initialize(ushort per = 12)
     {
-        period = per;
-        m1 = 2.0/(1 + period);
-        m2 = 1 - m1;
+        _period = per;
+        _m1 = 2.0/(1 + _period);
+        _m2 = 1 - _m1;
     }
 
     double eval(double value)
     {
-        if(!hasVal)
+        if(!_hasVal)
         {
             static if(useSma)
             {
-                lastVal += value;
-                idx++;
+                _lastVal += value;
+                _idx++;
                 
-                if(idx == period) 
+                if(_idx == _period) 
                 {
-                    hasVal = true;
-                    lastVal = lastVal / idx;
-                    return lastVal;
+                    _hasVal = true;
+                    _lastVal /= _idx;
+                    return _lastVal;
                 }
                 
-                return lastVal / idx;
+                return _lastVal / _idx;
             }
             else
             {
-                lastVal = value;
-                hasVal = true;
+                _lastVal = value;
+                _hasVal = true;
                 
                 return value;
             }
         }
         
-        lastVal = value * m1 + lastVal * m2; 
+        _lastVal = value * _m1 + _lastVal * _m2; 
         
-        return lastVal;
+        return _lastVal;
     }
 }
 
@@ -88,77 +88,77 @@ mixin template Ema(bool useSma = true)
  */
 mixin template Sma()
 {
-    private ushort period;
-    private bool isFull;
-    private double lastSum = 0;
-    private ushort idx;
-    private double[] buffer;
+    private ushort _period;
+    private bool _isFull;
+    private double _lastSum = 0;
+    private ushort _idx;
+    private double[] _buffer;
 
-    void initialize(ushort perd = 12)
+    void initialize(ushort period = 12)
     {
-        assert(perd > 0);
+        assert(period > 0);
         
-        period = perd;
-        buffer = new double[perd];
+        _period = period;
+        _buffer = new double[period];
     }
 
     double eval(double value)
     {
-        if(!isFull)
+        if(!_isFull)
         {
-            buffer[idx++] = value;
-            lastSum += value;
+            _buffer[_idx++] = value;
+            _lastSum += value;
             
-            if(idx == period)
+            if(_idx == _period)
             {
-                idx = 0;
-                isFull = true;
-                return lastSum / period;
+                _idx = 0;
+                _isFull = true;
+                return _lastSum / _period;
             }
             
-            return lastSum / idx;
+            return _lastSum / _idx;
         }
         
-        lastSum -= buffer[idx];
-        buffer[idx++] = value;
-        lastSum += value;
-        if(idx == period) idx = 0;
+        _lastSum -= _buffer[_idx];
+        _buffer[_idx++] = value;
+        _lastSum += value;
+        if(_idx == _period) _idx = 0;
         
-        return lastSum / period;
+        return _lastSum / _period;
     }
 }
 
 mixin template MinMax(bool min = true)
 {
-    private ushort period;
-    private ushort idx;
-    private bool isBuffFull;
-    private double minmax = min ? int.max : int.min;
-    private double[] buffer;
+    private ushort _period;
+    private ushort _idx;
+    private bool _isBuffFull;
+    private double _minmax = min ? int.max : int.min;
+    private double[] _buffer;
     
-    void initialize(ushort perd = 14)
+    void initialize(ushort period = 14)
     {
-        assert(perd > 0);
+        assert(period > 0);
         
-        period = perd;
-        buffer = new double[perd];
+        _period = period;
+        _buffer = new double[period];
     }
     
     pure nothrow double eval(double value)
     {
         bool gen = false;
-        if (isBuffFull)
+        if (_isBuffFull)
         {
-            if (minmax == buffer[idx]) gen = true;
+            if (_minmax == _buffer[_idx]) gen = true;
             else
             {
                 static if(min)
                 {
-                    if (value < minmax) minmax = value;
+                    if (value < _minmax) _minmax = value;
                 }
                 else
                 {
-                    if (value > minmax) minmax = value;
+                    if (value > _minmax) _minmax = value;
                 }
             }
         }
@@ -166,38 +166,38 @@ mixin template MinMax(bool min = true)
         {
             static if(min)
             {
-                if (value < minmax) minmax = value;
+                if (value < _minmax) _minmax = value;
             }
             else
             {
-                if (value > minmax) minmax = value;
+                if (value > _minmax) _minmax = value;
             }
         }
         
-        buffer[idx++] = value;
-        if (idx == period)
+        _buffer[_idx++] = value;
+        if (_idx == _period)
         {
-            isBuffFull = true;
-            idx = 0;
+            _isBuffFull = true;
+            _idx = 0;
         }
         
         if (gen == true)
         {
-            minmax = buffer[0];
-            for (ushort i = 1; i < period; i++)
+            _minmax = _buffer[0];
+            for (ushort i = 1; i < _period; i++)
             {
                 static if(min)
                 {
-                    if (buffer[i] < minmax) minmax = buffer[i];
+                    if (_buffer[i] < _minmax) _minmax = _buffer[i];
                 }
                 else
                 {
-                    if (buffer[i] > minmax) minmax = buffer[i];
+                    if (_buffer[i] > _minmax) _minmax = _buffer[i];
                 }
             }
         }
         
-        return minmax;
+        return _minmax;
     }
 }
 
@@ -220,7 +220,7 @@ mixin template StdDev(bool withAverage = false)
         
         auto avg = sma.eval(value);
         
-        if(!sma.isFull && sma.idx == 1) 
+        if(!sma._isFull && sma._idx == 1) 
         {
             static if(withAverage) return tuple(avg, 0.0);
             else return 0.0;
@@ -228,14 +228,38 @@ mixin template StdDev(bool withAverage = false)
         
         //count stddev
         double sum = 0;
-        for(ushort i = 0; i < (sma.isFull ? sma.period: sma.idx); i++)
+        for(ushort i = 0; i < (sma._isFull ? sma._period: sma._idx); i++)
         {
-            sum += (sma.buffer[i] - avg)*(sma.buffer[i] - avg);
+            sum += (sma._buffer[i] - avg)*(sma._buffer[i] - avg);
         }
 
         static if(withAverage)
-            return tuple(avg, sqrt(sum / (sma.isFull ? sma.period : sma.idx)));
+            return tuple(avg, sqrt(sum / (sma._isFull ? sma._period : sma._idx)));
         else
-            return sqrt(sum / (sma.isFull ? sma.period : sma.idx));
+            return sqrt(sum / (sma._isFull ? sma._period : sma._idx));
+    }
+}
+
+mixin template TrueRange()
+{
+    import stockd.defs.bar;
+
+    private double _prevClose = double.nan;
+
+    private double eval(Bar bar)
+    {
+        import std.math : isNaN, abs;
+        import std.algorithm : max;
+
+        if(isNaN(_prevClose))
+        {
+            _prevClose = bar.close;
+            return bar.high - bar.low;
+        }
+
+        double res = max(bar.high - bar.low, abs(bar.low - _prevClose), abs(bar.high - _prevClose));
+        _prevClose = bar.close;
+
+        return res;
     }
 }

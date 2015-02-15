@@ -34,17 +34,7 @@ auto heikenAshi(R)(R input)
 struct HeikenAshi(R)
     if(isInputRange!R && is(ElementType!R == Bar))
 {
-    enum evalNext = `
-        _close = (cur.open + cur.high + cur.low + cur.close) * 0.25;
-        _front = Bar(
-            cur.time,
-            _open = ((_front.open + _front.close) * 0.5),
-            max(cur.high, _open, _close),
-            min(cur.low, _open, _close),
-            _close,
-            cur.volume);`;
-
-    R _input;
+    private R _input;
     private Bar _front;
     private double _open, _close;
     
@@ -61,28 +51,6 @@ struct HeikenAshi(R)
             first.low,
             (first.open + first.high + first.low + first.close) * 0.25,
             first.volume);
-    }
-    
-    int opApply(scope int delegate(ref Bar) func)
-    {
-        import std.algorithm : max, min;
-
-        int result;
-        Bar _front = this._front;
-        double _open, _close;
-
-        //send first
-        _input.popFront();
-        result = func(_front);
-        if(result) return result;
-        
-        foreach(ref cur; _input)
-        {
-            mixin(evalNext);
-            result = func(_front);
-            if(result) break;
-        }
-        return result;
     }
     
     @property bool empty()
@@ -105,7 +73,14 @@ struct HeikenAshi(R)
         
         auto cur = _input.front(); //cache it
         
-        mixin(evalNext);
+        _close = (cur.open + cur.high + cur.low + cur.close) * 0.25;
+        _front = Bar(
+            cur.time,
+            _open = ((_front.open + _front.close) * 0.5),
+            max(cur.high, _open, _close),
+            min(cur.low, _open, _close),
+            _close,
+            cur.volume);
     }
 }
 

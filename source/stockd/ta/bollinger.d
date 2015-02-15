@@ -36,8 +36,8 @@ auto bollinger(R)(R input, ushort period = 14, double stdDevNum = 2)
 struct Bollinger(R)
     if(isInputRange!R && is(ElementType!R == double))
 {
-    private double stdDevNum;
-    private R input;
+    private double _stdDevNum;
+    private R _input;
 
     mixin StdDev!true stdd;
 
@@ -45,26 +45,26 @@ struct Bollinger(R)
     {
         stdd.initialize(period);
 
-        this.stdDevNum = stdDevNum;
-        this.input = input;
+        this._stdDevNum = stdDevNum;
+        this._input = input;
     }
 
     @property bool empty()
     {
-        return input.empty;
+        return _input.empty;
     }
 
     /// Returns tuple of middle, upper, lower
     @property auto front()
     {
-        auto std = stdd.eval(input.front);
+        auto std = stdd.eval(_input.front);
 
-        return tuple(std[0], std[0] + std[1] * stdDevNum, std[0] - std[1] * stdDevNum);
+        return tuple(std[0], std[0] + std[1] * _stdDevNum, std[0] - std[1] * _stdDevNum);
     }
 
     void popFront()
     {
-        input.popFront();
+        _input.popFront();
     }
 }
 
