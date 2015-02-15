@@ -2,7 +2,9 @@ module stockd.ta.cci;
 
 import std.math;
 import std.stdio;
+import std.range;
 import stockd.defs.bar;
+import stockd.ta.templates : Sma;
 
 /**
  * Commodity Channel Index (CCI)
@@ -31,22 +33,39 @@ import stockd.defs.bar;
  * typical price. Second, take the absolute values of these numbers. Third, 
  * sum the absolute values. Fourth, divide by the total number of periods (20).
  */
-class CCI
+auto cci(R)(R input, ushort period = 14)
+    if(isInputRange!R && is(ElementType!R == Bar))
+{
+    return CCI!R(input, period);
+}
+
+/// dtto
+struct CCI(R)
+    if(isInputRange!R && is(ElementType!R == Bar))
 {
     private ushort period;
     private bool isFull;
     private double lastSum = 0;
     private ushort idx;
     private double[] buffer;
+    private R input;
 
-    this(ushort period = 14)
+    this(R input, ushort period = 14)
     {
         this.period = period;
         this.buffer = new double[period];
+        this.input = input;
     }
 
-    pure nothrow double add(Bar value)
+    @property bool empty()
     {
+        return input.empty;
+    }
+    
+    @property auto front()
+    {
+        auto value = input.front;
+
         double typical = (value.high + value.low + value.close)/3;
         double sma = 0;
         
@@ -82,48 +101,9 @@ class CCI
         return (typical - sma) / (mean == 0 ? 1 : (0.015 * mean));
     }
 
-    static void evaluate(const ref Bar[] input, ushort period, ref double[] output)
+    void popFront()
     {
-        assert(input != null);
-        assert(output != null);
-        assert(input.length == output.length);
-        assert(input.length > 0);
-
-        double[] buffer = new double[period]; //to allow input and output arrays be the same
-        ushort idx = 0;
-        
-        double typical = 0;
-        double sma = 0;
-        double sum = 0;
-        double mean = 0;
-        size_t i;
-        
-        for(i=0; i<period; i++)
-        {
-            typical = (input[i].high + input[i].low + input[i].close)/3;
-            sum += (buffer[i] = typical);
-            sma = sum/(i + 1);
-            mean = 0;
-            for (int j = cast(int)i; j >= 0; j--) { mean += abs(buffer[j] - sma); }
-            mean = mean / (i + 1);
-            output[i] = (typical - sma) / (mean == 0 ? 1 : (0.015 * mean));
-        }
-        
-        for(i=period; i<input.length; i++)
-        {
-            typical = (input[i].high + input[i].low + input[i].close)/3;
-            
-            sum -= buffer[idx];
-            sum += (buffer[idx] = typical);
-            sma = sum / period;
-            
-            if(++idx == period) idx = 0;
-            
-            mean = 0;
-            for (int j = period - 1; j >= 0; j--) { mean += abs(buffer[j] - sma); }
-            mean = mean / period;
-            output[i] = (typical - sma) / (mean == 0 ? 1 : 0.015 * mean);
-        }
+        input.popFront();
     }
 }
 
@@ -132,6 +112,8 @@ unittest
     import std.csv;
     import std.stdio;
     import std.datetime;
+
+    writeln(">> CCI tests <<");
     
     struct Layout {double open; double high; double low; double close;}
     
@@ -174,16 +156,15 @@ unittest
     }
 
     double[] expected = [0.00000, -66.66667, -100.00000, -101.00872, -115.38834, -126.05605, -20.49717, 7.39273, 148.20310, 52.05630, 14.03749, 55.03407, -17.10455, 259.92227, 243.90733, 182.08210, 166.50918, 142.16963, 131.64291, 102.31496, 30.73599, 6.55159, 33.29641, 34.95138, 13.84012, -10.74781, -11.58211, -29.34718, -129.35566, -73.06960];
-    double[] eval = new double[expected.length];
 
-    ushort period = 20;
+    auto range = cci(bars, 20);
+    assert(isInputRange!(typeof(range)));
+    double[] evaluated = range.array;
+    assert(approxEqual(expected, evaluated));
+    
+    auto wrapped = inputRangeObject(cci(bars, 20));
+    evaluated = wrapped.array;
+    assert(approxEqual(expected, evaluated));
 
-    CCI.evaluate(bars, period, eval);
-    assert(approxEqual(expected, eval));
-
-    auto cci = new CCI(period);
-    for(int i=0; i<bars.length; i++)
-    {
-        assert(approxEqual(expected[i], cci.add(bars[i])));
-    }
+    writeln(">> CCI tests OK <<");
 }

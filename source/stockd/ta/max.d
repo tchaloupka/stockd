@@ -1,117 +1,64 @@
 module stockd.ta.max;
 
-import std.stdio;
+import std.range;
+import stockd.ta.templates;
 
 /** 
  * Evaluates the maximum value of the specified period
  */
-class Max
+auto max(R)(R input, ushort period = 14)
+    if(isInputRange!R && is(ElementType!R == double))
 {
-    private ushort period;
-    private ushort idx;
-    private bool isBuffFull;
-    private double max = int.min;
-    private double[] buffer;
+    return Max!R(input, period);
+}
 
-    this(ushort period = 14)
+/// dtto
+struct Max(R)
+    if(isInputRange!R && is(ElementType!R == double))
+{
+    mixin MinMax!(false) max;
+    private R input;
+
+    this(R input, ushort period = 14)
     {
-        assert(period > 0);
-
-        this.period = period;
-        this.buffer = new double[period];
+        max.initialize(period);
+        this.input = input;
     }
 
-    /// Add next value, returns current max for the period
-    pure nothrow double add(double value)
+    @property bool empty()
     {
-        bool genMax = false;
-        if (isBuffFull)
-        {
-            if (max == buffer[idx]) genMax = true;
-            else if (value > max) max = value;
-        }
-        else
-        {
-            if (value > max) max = value;
-        }
-        
-        buffer[idx++] = value;
-        if (idx == period)
-        {
-            isBuffFull = true;
-            idx = 0;
-        }
-        
-        if (genMax == true)
-        {
-            max = buffer[0];
-            for (ushort i = 1; i < period; i++)
-            {
-                if (buffer[i] > max) max = buffer[i];
-            }
-        }
-        
-        return max;
+        return input.empty;
+    }
+    
+    @property auto front()
+    {
+        return max.eval(input.front);
     }
 
-    /// Evaluates max value for the whole input array
-    static void evaluate(const ref double[] input, ushort period, ref double[] output)
+    void popFront()
     {
-        assert(input != null);
-        assert(output != null);
-        assert(input.length == output.length);
-        assert(input.length > 0);
-        assert(period > 0);
-        
-        double max = int.min, tmp;
-        ptrdiff_t trailingIdx = 0 - (period - 1);
-        ptrdiff_t maxIdx = -1;
-        size_t today, i;
-
-        while (today < input.length)
-        {
-            tmp = input[today];
-            
-            if (maxIdx < trailingIdx)
-            {
-                maxIdx = trailingIdx;
-                max = input[maxIdx];
-                i = maxIdx;
-                while (++i <= today)
-                {
-                    tmp = input[i];
-                    if (tmp >= max)
-                    {
-                        max = tmp;
-                        maxIdx = i;
-                    }
-                }
-            }
-            else if (tmp >= max)
-            {
-                max = tmp;
-                maxIdx = today;
-            }
-            
-            output[today++] = max;
-            trailingIdx++;
-        }
+        input.popFront();
     }
 }
 
 unittest
 {
-    ushort period = 4;
+    import std.stdio;
+    import std.math : approxEqual;
+
+    writeln(">> Max tests <<");
+
     double[] input    = [1,2,3,4,5,9,3,4,5,3,4,5,6];
     double[] expected = [1,2,3,4,5,9,9,9,9,5,5,5,6];
-    double[] evaluated = new double[input.length];
 
-    Max.evaluate(input, period, evaluated);
-    assert(evaluated == expected);
+    auto range = max(input, 4);
+    assert(isInputRange!(typeof(range)));
+    auto evaluated = range.array;
+    assert(approxEqual(expected, evaluated));
     
-    auto m = new Max(period);
-    for(int i=0; i<input.length; i++)
-    {
-        assert(expected[i] == m.add(input[i]));
-    }
+    auto wrapped = inputRangeObject(max(input, 4));
+    evaluated = wrapped.array;
+    assert(approxEqual(expected, evaluated));
+
+    writeln(">> Max tests OK <<");
 }

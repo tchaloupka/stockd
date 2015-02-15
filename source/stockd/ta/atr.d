@@ -1,6 +1,7 @@
 module stockd.ta.atr;
 
 import std.math;
+import std.range;
 import stockd.defs.bar;
 
 /**
@@ -16,7 +17,15 @@ import stockd.defs.bar;
  * Wilder created Average True Range to capture this "missing" volatility. It is important to remember that ATR 
  * does not provide an indication of price direction, just volatility.
  */
-class ATR
+auto atr(R)(R input, ushort period = 14)
+    if(isInputRange!R && is(ElementType!R == Bar))
+{
+    return ATR!R(input, period);
+}
+
+/// dtto
+struct ATR(R)
+    if(isInputRange!R && is(ElementType!R == Bar))
 {
     private ushort period;
     private ushort lPeriod;
@@ -25,16 +34,26 @@ class ATR
     private ushort idx;
     private double m1, m2, m3;
 
-    this(ushort period = 14)
+    R input;
+    
+    this(R input, ushort period = 14)
     {
         assert(period > 0);
 
+        this.input = input;
         this.period = period;
         this.lPeriod = cast(ushort)(period - 1);
     }
-
-    pure nothrow double add(Bar bar)
+    
+    @property bool empty()
     {
+        return input.empty;
+    }
+    
+    @property auto front()
+    {
+        auto bar = input.front;
+
         m1 = bar.high - bar.low;
         
         if(idx == 0)
@@ -65,49 +84,10 @@ class ATR
         
         return prevAtr;
     }
-
-    static void evaluate(const ref Bar[] input, ushort period, ref double[] output)
+    
+    void popFront()
     {
-        assert(input != null);
-        assert(output != null);
-        assert(period > 0);
-        assert(input.length == output.length);
-        assert(input.length > 0);
-
-        ushort lPeriod = cast(ushort)(period - 1);
-        double prevAtr = 0;
-        double prevClose;
-        double m1, m2, m3;
-        
-        for(size_t i=0; i<input.length; i++)
-        {
-            m1 = input[i].high - input[i].low;
-            
-            if(i == 0) 
-            {
-                prevAtr = m1;
-            }
-            else
-            {
-                m2 = abs(input[i].low - prevClose);
-                m3 = abs(input[i].high - prevClose);
-                
-                if(m2 > m1) m1 = m2;
-                if(m3 > m1) m1 = m3;
-                
-                if(i < period)
-                {
-                    prevAtr = (prevAtr * i + m1)/(i + 1);
-                }
-                else
-                {
-                    prevAtr = (prevAtr * lPeriod + m1) / period;
-                }
-            }
-            
-            prevClose = input[i].close;
-            output[i] = prevAtr;
-        }
+        input.popFront();
     }
 }
 
@@ -116,6 +96,8 @@ unittest
     import std.csv;
     import std.stdio;
     import std.datetime;
+
+    writeln(">> ATR tests <<");
     
     struct Layout {double high; double low; double close;}
     
@@ -158,16 +140,16 @@ unittest
     }
     
     double[] expected = [0.91000, 0.74500, 0.66667, 0.62500, 0.61600, 0.58250, 0.53643, 0.53063, 0.53833, 0.51650, 0.55409, 0.57125, 0.56192, 0.55500, 0.59393, 0.58579, 0.56895, 0.61545, 0.61792, 0.64235, 0.67433, 0.69277, 0.77543, 0.78147, 1.20923, 1.30262, 1.38029, 1.36670, 1.33622, 1.31648];
-    double[] eval = new double[expected.length];
 
-    const(ushort) period = 14;
-    ATR.evaluate(bars, period, eval);
-    assert(approxEqual(expected, eval));
+    auto range = atr(bars, 14);
+    assert(isInputRange!(typeof(range)));
+    double[] evaluated = range.array;
+    assert(approxEqual(expected, evaluated));
     
-    auto atr = new ATR(period);
-    for(int i=0; i<bars.length; i++)
-    {
-        assert(approxEqual(expected[i], atr.add(bars[i])));
-    }
+    auto wrapped = inputRangeObject(atr(bars, 14));
+    evaluated = wrapped.array;
+    assert(approxEqual(expected, evaluated));
+
+    writeln(">> ATR tests OK <<");
 }
 

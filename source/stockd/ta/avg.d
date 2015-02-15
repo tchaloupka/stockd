@@ -22,17 +22,17 @@ struct Average(R)
         this._input = input;
     }
     
-    int opApply(scope int delegate(double) func)
-    {
-        int result;
-        
-        foreach(ref cur; _input)
-        {
-            result = func((cur.open + cur.high + cur.low + cur.close)*0.25);
-            if(result) break;
-        }
-        return result;
-    }
+//    int opApply(scope int delegate(double) func)
+//    {
+//        int result;
+//        
+//        foreach(ref cur; _input)
+//        {
+//            result = func((cur.open + cur.high + cur.low + cur.close)*0.25);
+//            if(result) break;
+//        }
+//        return result;
+//    }
     
     @property bool empty()
     {
@@ -57,6 +57,8 @@ unittest
     import std.stdio;
     import std.math;
 
+    writeln(">> AVG tests <<");
+
     Bar[] bars = 
     [
         bar!"20000101;2;4;1;3;100",
@@ -73,4 +75,6 @@ unittest
     auto wrapped = inputRangeObject(average(bars));
     evaluated = wrapped.array;
     assert(approxEqual(expected, evaluated));
+
+    writeln(">> AVG tests OK <<");
 }

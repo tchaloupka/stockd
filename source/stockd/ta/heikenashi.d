@@ -111,6 +111,9 @@ struct HeikenAshi(R)
 
 unittest
 {
+    import std.stdio;
+    writeln(">> HeikenAshi tests <<");
+
     Bar[] data = 
     [
         bar!"20000101;58.67;58.82;57.03;57.73;100",
@@ -133,4 +136,6 @@ unittest
     auto wrapped = inputRangeObject(heikenAshi(data));
     eval = wrapped.array;
     assert(equal(expected, eval));
+
+    writeln(">> HeikenAshi tests OK <<");
 }

@@ -1,6 +1,8 @@
 module stockd.ta.median;
 
 import stockd.defs.bar;
+import std.range;
+import stockd.ta.templates;
 
 /**
  * Evaluates median price for the specified period
@@ -9,138 +11,54 @@ import stockd.defs.bar;
  * 
  * Where max and min are evaluated from values within period
  */
-class Median
+auto median(R)(R input, ushort period = 14)
+    if(isInputRange!R && is(ElementType!R == Bar))
 {
-    private ushort period;
-    private ushort idx;
-    private bool isBuffFull;
-    private double max = int.min;
-    private double min = int.max;
-    private double[] hBuffer;
-    private double[] lBuffer;
+    return Median!R(input, period);
+}
 
-    this(ushort period = 14)
+/// dtto
+struct Median(R)
+    if(isInputRange!R && is(ElementType!R == Bar))
+{
+    private R input;
+
+    mixin MinMax!(true) min;
+    mixin MinMax!(false) max;
+
+    this(R input, ushort period = 14)
     {
-        assert(period > 0);
-        
-        this.period = period;
-        this.hBuffer = new double[period];
-        this.lBuffer = new double[period];
+        min.initialize(period);
+        max.initialize(period);
+        this.input = input;
     }
 
-    pure nothrow double add(Bar value)
+    @property bool empty()
     {
-        bool genMax = false;
-        bool genMin = false;
-        if (isBuffFull)
-        {
-            if (max == hBuffer[idx]) genMax = true;
-            else if (value.high > max) { max = value.high; }
-            if (min == lBuffer[idx]) genMin = true;
-            else if (value.low < min) { min = value.low; }
-        }
-        else
-        {
-            if (value.high > max) { max = value.high; }
-            if (value.low < min) { min = value.low; }
-        }
-        
-        hBuffer[idx] = value.high;
-        lBuffer[idx++] = value.low;
-        if (idx == period)
-        {
-            isBuffFull = true;
-            idx = 0;
-        }
-        
-        if (genMax == true)
-        {
-            max = hBuffer[0];
-            for (ushort i = 1; i < period; i++)
-            {
-                if (hBuffer[i] > max) max = hBuffer[i];
-            }
-        }
+        return input.empty;
+    }
+    
+    @property auto front()
+    {
+        auto val = input.front;
 
-        if (genMin == true)
-        {
-            min = lBuffer[0];
-            for (ushort i = 1; i < period; i++)
-            {
-                if (lBuffer[i] < min) min = lBuffer[i];
-            }
-        }
-
-        return (max + min)/2;
+        return (max.eval(val.high) + min.eval(val.low))/2;
     }
 
-    static void evaluate(const ref Bar[] input, ushort period, ref double[] output)
+    void popFront()
     {
-        assert(input != null);
-        assert(output != null);
-        assert(input.length == output.length);
-        assert(input.length > 0);
-        assert(period > 0);
-
-        double min = int.max, max = int.min;
-        ptrdiff_t trailingIdx = 0 - (period - 1);
-        ptrdiff_t minIdx = -1, maxIdx = -1;
-        size_t today, i;
-        
-        while (today < input.length)
-        {
-            if (minIdx < trailingIdx)
-            {
-                minIdx = trailingIdx;
-                min = input[minIdx].low;
-                i = minIdx;
-                while (++i <= today)
-                {
-                    if (input[i].low <= min)
-                    {
-                        min = input[i].low;
-                        minIdx = i;
-                    }
-                }
-            }
-            else if (input[today].low <= min)
-            {
-                min = input[today].low;
-                minIdx = today;
-            }
-
-            if (maxIdx < trailingIdx)
-            {
-                maxIdx = trailingIdx;
-                max = input[maxIdx].high;
-                i = maxIdx;
-                while (++i <= today)
-                {
-                    if (input[i].high >= max)
-                    {
-                        max = input[i].high;
-                        maxIdx = i;
-                    }
-                }
-            }
-            else if (input[today].high >= max)
-            {
-                max = input[today].high;
-                maxIdx = today;
-            }
-            
-            output[today++] = (max + min)/2;
-            trailingIdx++;
-        }
+        input.popFront();
     }
 }
 
 unittest
 {
     import std.csv;
-    import std.math;
+    import std.math : approxEqual;
     import std.stdio;
     import std.datetime;
+
+    writeln(">> Median tests <<");
     
     struct Layout {double high; double low;}
     
@@ -184,17 +102,16 @@ unittest
     }
     
     double[] expected = [126.1832,126.48665,126.27275,126.27275,126.5513,126.68065,126.68065,126.6309,126.6309,126.6309,126.4966,126.4966,125.9643,126.13845,126.13845,126.39215,126.417,126.422,126.6707,127.0985,127.34725,127.6059,127.9939,127.9939,127.9939,127.9939,128.5262,128.4814,128.4814,128.0934];
-    double[] eval = new double[bars.length];
 
-    ushort period = 7;
-
-    Median.evaluate(bars, period, eval);
-    assert(approxEqual(expected, eval));
+    auto range = median(bars, 7);
+    assert(isInputRange!(typeof(range)));
+    auto evaluated = range.array;
+    assert(approxEqual(expected, evaluated));
     
-    auto med = new Median(period);
-    for(int i=0; i<bars.length; i++)
-    {
-        assert(approxEqual(expected[i], med.add(bars[i])));
-    }
+    auto wrapped = inputRangeObject(median(bars, 7));
+    evaluated = wrapped.array;
+    assert(approxEqual(expected, evaluated));
+
+    writeln(">> Median tests OK <<");
 }
 

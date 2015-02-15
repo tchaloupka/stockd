@@ -32,19 +32,9 @@ auto trueRange(R)(R input)
 struct TrueRange(R)
     if(isInputRange!R && is(ElementType!R == Bar))
 {
-    enum evalNext = `
-        _m1 = cur.high - cur.low;
-        _m2 = abs(cur.low - _prevClose);
-        _m3 = abs(cur.high - _prevClose);
-        _prevClose = cur.close;
-        
-        if(_m2 > _m1) _m1 = _m2;
-        if(_m3 > _m1) _m1 = _m3;`;
-
     private double _prevClose;
     private double _m1, _m2, _m3;
-
-    R _input;
+    private R _input;
     
     this(R input)
     {
@@ -52,29 +42,6 @@ struct TrueRange(R)
 
         _m1 = input.front.high - input.front.low;
         _prevClose = input.front.close;
-    }
-    
-    int opApply(scope int delegate(double) func)
-    {
-        import std.math : abs;
-
-        int result;
-        double _prevClose = this._prevClose;
-        double _m1 = this._m1;
-        double _m2, _m3;
-
-        //send first
-        _input.popFront();
-        result = func(_m1);
-        if(result) return result;
-        
-        foreach(ref cur; _input)
-        {
-            mixin(evalNext);
-            result = func(_m1);
-            if(result) break;
-        }
-        return result;
     }
     
     @property bool empty()
@@ -97,7 +64,13 @@ struct TrueRange(R)
 
         auto cur = _input.front(); //cache it
 
-        mixin(evalNext);
+        _m1 = cur.high - cur.low;
+        _m2 = abs(cur.low - _prevClose);
+        _m3 = abs(cur.high - _prevClose);
+        _prevClose = cur.close;
+        
+        if(_m2 > _m1) _m1 = _m2;
+        if(_m3 > _m1) _m1 = _m3;
     }
 }
 

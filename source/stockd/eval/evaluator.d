@@ -205,9 +205,6 @@ struct Evaluator(R, ParseTree def)
             parseTree(f);
         }
 
-        //close constructor
-        constructor ~= '}';
-
         //create combined filter for output
         assert(filterNum > 0);
         if(filterNum == 1)
@@ -216,10 +213,13 @@ struct Evaluator(R, ParseTree def)
         }
         else assert(0, "Not implemented yet!");
 
+        //close constructor
+        constructor ~= "            }";
+
         return params ~ '\n' ~ constructor ~ '\n' ~ rangeImpl;
     }
 
-    //pragma(msg, evaluatorImpl!(R, def));
+    pragma(msg, evaluatorImpl!(R, def));
 
     mixin(evaluatorImpl!(R, def));
 }

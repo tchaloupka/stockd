@@ -1,7 +1,9 @@
 module stockd.ta.stochastic;
 
+import std.range;
+import std.typecons;
 import stockd.defs.bar;
-import stockd.ta.sma;
+import stockd.ta.templates;
 
 /**
  * Stochastic Oscillator
@@ -29,251 +31,75 @@ import stockd.ta.sma;
  *      Full %K = Fast %K smoothed with X-period SMA
  *      Full %D = X-period SMA of Full %K
  */
-class Stochastic
+auto stochastic(R)(R input, ushort period = 14, ushort kSmooth = 3, ushort dSmooth = 7)
+    if(isInputRange!R && is(ElementType!R == Bar))
 {
-    private ushort period, kSmooth, dSmooth;
+    return Stochastic!R(input, period, kSmooth, dSmooth);
+}
 
-    private bool buffFull;
-    private bool slowKBuffFull;
-    private bool slowDBuffFull;
-
-    private ushort idx, slowKIdx, slowDIdx;
-    private double[] minBuffer, maxBuffer;
-    private double min = int.max;
-    private double max = 0;
-
+struct Stochastic(R)
+    if(isInputRange!R && is(ElementType!R == Bar))
+{
     private double lastKSum = 0, lastDSum = 0;
-    private double[] slowKBuffer, slowDBuffer;
     private double prevFastK = 50;
+    private R input;
 
-    this(ushort period = 14, ushort kSmooth = 3, ushort dSmooth = 7)
+    mixin MinMax!false maxeval;
+    mixin MinMax!true mineval;
+    mixin Sma kSmooth;
+    mixin Sma dSmooth;
+
+    this(R input, ushort period = 14, ushort kSmoothPeriod = 3, ushort dSmoothPeriod = 7)
     {
         assert(period > 0);
-        assert(kSmooth > 0);
-        assert(dSmooth > 0);
+        assert(kSmoothPeriod > 0);
+        assert(dSmoothPeriod > 0);
 
-        this.period = period;
-        this.kSmooth = kSmooth;
-        this.dSmooth = dSmooth;
+        mineval.initialize(period);
+        maxeval.initialize(period);
+        kSmooth.initialize(kSmoothPeriod);
+        dSmooth.initialize(dSmoothPeriod);
 
-        this.minBuffer = new double[period];
-        this.maxBuffer = new double[period];
-        this.slowKBuffer = new double[period];
-        this.slowDBuffer = new double[period];
+        this.input = input;
     }
 
-    pure nothrow void add(Bar bar, out double k, out double d)
+    @property bool empty()
     {
-        //get MAX High
-        bool genMax = false;
-        if (buffFull)
-        {
-            if (max == maxBuffer[idx]) genMax = true;
-            else if (bar.high > max) { max = bar.high; }
-        }
-        else
-        {
-            if (idx == 0) { max = bar.high; }
-            else if (bar.high > max) { max = bar.high; }
-        }
+        return input.empty;
+    }
+    
+    @property auto front()
+    {
+        auto val = input.front;
+        double min = mineval.eval(val.low);
+        double max = maxeval.eval(val.high);
         
-        maxBuffer[idx] = bar.high;
-        
-        if (genMax == true)
-        {
-            max = maxBuffer[0];
-            for (int i = 1; i < period; i++)
-            {
-                if (maxBuffer[i] > max) max = maxBuffer[i];
-            }
-        }
-        
-        //Get Min Low
-        bool genMin = false;
-        if (buffFull)
-        {
-            if (min == minBuffer[idx]) genMin = true;
-            else if (bar.low < min) { min = bar.low; }
-        }
-        else
-        {
-            if (idx == 0) { min = bar.low; }
-            else if (bar.low < min) { min = bar.low; }
-        }
-        
-        minBuffer[idx] = bar.low;
-        
-        if (genMin == true)
-        {
-            min = minBuffer[0];
-            for (int i = 1; i < period; i++)
-            {
-                if (minBuffer[i] < min) min = minBuffer[i];
-            }
-        }
-        
-        //increment index
-        if (++idx == period)
-        {
-            buffFull = true;
-            idx = 0;
-        }
-        
-        double nom = bar.close - min;
+        double nom = val.close - min;
         double den = max - min;
         
         prevFastK = den < 0.000000000001 ? prevFastK : 100 * nom / den;
         
-        //Smooth FastK => SlowK
-        if(!slowKBuffFull)
-        {
-            slowKBuffer[slowKIdx++] = prevFastK;
-            lastKSum += prevFastK;
-            
-            if(slowKIdx == kSmooth)
-            {
-                slowKIdx = 0;
-                slowKBuffFull = true;
-                k = lastKSum / kSmooth;
-            }
-            else k = lastKSum/(slowKIdx);
-        }
-        else
-        {
-            lastKSum -= slowKBuffer[slowKIdx];
-            slowKBuffer[slowKIdx++] = prevFastK;
-            lastKSum += prevFastK;
-            if(slowKIdx==kSmooth) slowKIdx = 0;
-            
-            if(lastKSum<0) lastKSum = 0; //due to double precission
-            
-            k = lastKSum / kSmooth;
-            if(k>100) k = 100; //due to double precission
-        }
+        double k = kSmooth.eval(prevFastK);
+        double d = dSmooth.eval(k);
         
-        //Smooth SlowK => SlowD
-        if(!slowDBuffFull)
-        {
-            slowDBuffer[slowDIdx++] = k;
-            lastDSum += k;
-            
-            if(slowDIdx == dSmooth)
-            {
-                slowDIdx = 0;
-                slowDBuffFull = true;
-                d = lastDSum / dSmooth;
-            }
-            else d = lastDSum/(slowDIdx);
-        }
-        else
-        {
-            lastDSum -= slowDBuffer[slowDIdx];
-            slowDBuffer[slowDIdx++] = k;
-            lastDSum += k;
-            if(slowDIdx == dSmooth) slowDIdx = 0;
-            
-            if(lastDSum<0) lastDSum = 0; //due to double precission
-            
-            d = lastDSum / dSmooth;
-            if(d > 100) d = 100;    //due to double precission
-        }
+        return tuple(k, d);
     }
 
-    static void evaluate(const ref Bar[] input, ushort period, ushort kSmooth, ushort dSmooth, ref double[] slowK, ref double[] slowD)
+    void popFront()
     {
-        assert(input != null);
-        assert(slowK != null);
-        assert(slowD != null);
-        assert(input.length == slowK.length);
-        assert(input.length == slowD.length);
-        assert(input.length > 0);
-        assert(period > 0);
-        assert(kSmooth > 0);
-        assert(dSmooth > 0);
-
-        ptrdiff_t trailingIdx = 0 - (period - 1);
-        ptrdiff_t maxIdx = -1;
-        ptrdiff_t minIdx = -1;
-        size_t today = 0;
-        double max = 0, min = int.max, tmp;
-        size_t i;
-        double prevFastK = 50;
-        double nom, den;
-        
-        while (today < input.length)
-        {
-            //Get MAX High
-            tmp = input[today].high;
-            
-            if (maxIdx < trailingIdx)
-            {
-                maxIdx = trailingIdx;
-                max = input[maxIdx].high;
-                i = maxIdx;
-                while (++i <= today)
-                {
-                    tmp = input[i].high;
-                    if (tmp >= max)
-                    {
-                        max = tmp;
-                        maxIdx = i;
-                    }
-                }
-            }
-            else if (tmp >= max)
-            {
-                max = tmp;
-                maxIdx = today;
-            }
-            
-            //Get Min Low
-            tmp = input[today].low;
-            
-            if (minIdx < trailingIdx)
-            {
-                minIdx = trailingIdx;
-                min = input[minIdx].low;
-                i = minIdx;
-                while (++i <= today)
-                {
-                    tmp = input[i].low;
-                    if (tmp <= min)
-                    {
-                        min = tmp;
-                        minIdx = i;
-                    }
-                }
-            }
-            else if (tmp <= min)
-            {
-                min = tmp;
-                minIdx = today;
-            }
-            
-            //Get FastK
-            nom = input[today].close - min;
-            den = max - min;
-            
-            prevFastK = den < 0.000000000001 ? prevFastK : 100 * nom / den;
-            
-            slowK[today++] = prevFastK;
-            trailingIdx++;
-        }
-        
-        //smooth FastK
-        Sma.evaluate(slowK, kSmooth, slowK);
-        
-        //create SlowD
-        Sma.evaluate(slowK, dSmooth, slowD);
+        input.popFront();
     }
 }
 
 unittest
 {
     import std.csv;
-    import std.math;
+    import std.math : approxEqual;
     import std.stdio;
     import std.datetime;
+    import std.algorithm : map;
+
+    writeln(">> Stochastic tests <<");
     
     struct Layout {double high; double low; double close;}
     
@@ -317,23 +143,17 @@ unittest
 
     double[] expectedK = [87.95108, 65.95030, 61.34393, 46.54998, 52.15049, 54.47970, 52.04842, 33.37051, 29.11941, 27.85521, 30.05948, 18.38104, 19.94298, 39.64567, 58.40525, 75.74975, 74.20719, 78.92012, 70.69402, 73.60043, 79.21167, 81.07192, 80.58069, 72.19280, 69.23506, 65.20178, 54.19122, 47.24283, 49.20025, 54.64869];
     double[] expectedD = [87.95108, 76.95069, 71.74844, 65.44882, 62.78915, 61.40425, 60.06770, 52.27048, 47.00892, 42.22482, 39.86903, 35.04483, 30.11101, 28.33919, 31.91558, 38.57705, 45.19877, 52.17886, 59.65214, 67.31749, 72.96978, 76.20787, 76.89801, 76.61024, 75.22666, 74.44205, 71.66931, 67.10233, 62.54923, 58.84466];
-    double[] evalK = new double[bars.length];
-    double[] evalD = new double[bars.length];
     
-    ushort period = 14;
-    ushort kSmooth = 3;
-    ushort dSmooth = 7;
+    auto range = stochastic(bars, 14, 3, 7);
+    assert(isInputRange!(typeof(range)));
+    auto evaluated = range.array;
+    assert(approxEqual(expectedK, evaluated.map!"a[0]"));
+    assert(approxEqual(expectedD, evaluated.map!"a[1]"));
     
-    Stochastic.evaluate(bars, period, kSmooth, dSmooth, evalK, evalD);
-    assert(approxEqual(expectedK, evalK));
-    assert(approxEqual(expectedD, evalD));
-    
-    auto stoch = new Stochastic(period, kSmooth, dSmooth);
-    for(int i=0; i<bars.length; i++)
-    {
-        double k, d;
-        stoch.add(bars[i], k, d);
-        assert(approxEqual(expectedK[i], k));
-        assert(approxEqual(expectedD[i], d));
-    }
+    auto wrapped = inputRangeObject(stochastic(bars, 14, 3, 7));
+    evaluated = wrapped.array;
+    assert(approxEqual(expectedK, evaluated.map!"a[0]"));
+    assert(approxEqual(expectedD, evaluated.map!"a[1]"));
+
+    writeln(">> Stochastic tests OK <<");
 }

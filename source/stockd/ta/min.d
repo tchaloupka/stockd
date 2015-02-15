@@ -1,115 +1,64 @@
 module stockd.ta.min;
 
-import std.stdio;
+import std.range;
+import stockd.ta.templates;
 
-/// Minimal value for the specified time period
-class Min
+/**
+ * Evaluates the minimal value for the specified time period
+ */
+auto min(R)(R input, ushort period = 14)
+    if(isInputRange!R && is(ElementType!R == double))
 {
-    private ushort period;
-    private ushort idx;
-    private bool isBuffFull;
-    private double min = int.max;
-    private double[] buffer;
+    return Min!R(input, period);
+}
 
-    this(ushort period = 14)
+/// dtto
+struct Min(R)
+    if(isInputRange!R && is(ElementType!R == double))
+{
+    mixin MinMax!(true) min;
+    private R input;
+
+    this(R input, ushort period = 14)
     {
-        assert(period > 0); 
-
-        this.period = period;
-        this.buffer = new double[period];
+        min.initialize(period);
+        this.input = input;
     }
 
-    /// Add next value, returns current min for the period
-    pure nothrow double add(double value)
+    @property bool empty()
     {
-        bool genMin = false;
-        if (isBuffFull)
-        {
-            if (min == buffer[idx]) genMin = true;
-            else if (value < min) min = value;
-        }
-        else
-        {
-            if (value < min) min = value;
-        }
-        
-        buffer[idx++] = value;
-        if (idx == period)
-        {
-            isBuffFull = true;
-            idx = 0;
-        }
-        
-        if (genMin == true)
-        {
-            min = buffer[0];
-            for (ushort i = 1; i < period; i++)
-            {
-                if (buffer[i] < min) min = buffer[i];
-            }
-        }
-        
-        return min;
+        return input.empty;
+    }
+    
+    @property auto front()
+    {
+        return min.eval(input.front);
     }
 
-    /// Evaluates min value for the whole input array
-    static void evaluate(const ref double[] input, ushort period, ref double[] output)
+    void popFront()
     {
-    	assert(input != null);
-    	assert(output != null);
-    	assert(input.length == output.length);
-        assert(input.length > 0);
-    	assert(period > 0);
-        
-        double min = int.max, tmp;
-        ptrdiff_t trailingIdx = 0 - (period - 1);
-        ptrdiff_t minIdx = -1;
-        size_t today, i;
-
-        while (today < input.length)
-        {
-            tmp = input[today];
-            
-            if (minIdx < trailingIdx)
-            {
-                minIdx = trailingIdx;
-                min = input[minIdx];
-                i = minIdx;
-                while (++i <= today)
-                {
-                    tmp = input[i];
-                    if (tmp <= min)
-                    {
-                        min = tmp;
-                        minIdx = i;
-                    }
-                }
-            }
-            else if (tmp <= min)
-            {
-                min = tmp;
-                minIdx = today;
-            }
-            
-            output[today++] = min;
-            trailingIdx++;
-        }
+        input.popFront();
     }
 }
 
 unittest
 {
-    ushort period = 4;
+    import std.stdio;
+    import std.math : approxEqual;
+
+    writeln(">> Min tests <<");
+
     double[] input    = [1,2,3,4,5,2,3,4,5,3,4,5,6];
     double[] expected = [1,1,1,1,2,2,2,2,2,3,3,3,3];
-    double[] evaluated = new double[input.length];
+
+    auto range = min(input, 4);
+    assert(isInputRange!(typeof(range)));
+    auto evaluated = range.array;
+    assert(approxEqual(expected, evaluated));
     
-    Min.evaluate(input, period, evaluated);
-    assert(evaluated == expected);
-    
-    auto m = new Min(period);
-    for(int i=0; i<input.length; i++)
-    {
-        assert(expected[i] == m.add(input[i]));
-    }
+    auto wrapped = inputRangeObject(min(input, 4));
+    evaluated = wrapped.array;
+    assert(approxEqual(expected, evaluated));
+
+    writeln(">> Min tests OK <<");
 }

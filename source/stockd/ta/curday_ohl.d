@@ -1,33 +1,51 @@
 module stockd.ta.curday_ohl;
 
 import std.datetime;
+import std.range;
+import std.typecons : tuple;
 import stockd.defs.bar;
 import stockd.defs.session;
+
+auto curDayOHL(R)(R input, TimeOfDay sessionStart)
+    if(isInputRange!R && is(ElementType!R == Bar))
+{
+    return CurrentDayOHL!R(input, sessionStart);
+}
 
 /**
  * Indicates che current trading session day open, highest and lowest price to see the potencial price movement
  * 
  * Works only for a intraday data!!
  */
-class CurrentDayOHL
+struct CurrentDayOHL(R)
+    if(isInputRange!R && is(ElementType!R == Bar))
 {
     private TimeOfDay sessionStart;
     private DateTime lastTime = DateTime.min();
     private double curOpen;
     private double curHigh;
     private double curLow;
+    private R input;
 
     /**
      * Params:
      *      sessionStart - time in UTC at whitch the trading session starts
      */
-    this(TimeOfDay sessionStart)
+    this(R input, TimeOfDay sessionStart)
     {
         this.sessionStart = sessionStart;
+        this.input = input;
     }
 
-    pure void add(Bar value, out double open, out double high, out double low)
+    @property bool empty()
     {
+        return input.empty;
+    }
+    
+    @property auto front()
+    {
+        auto value = input.front;
+
         if(isNextSession(lastTime, value.time, sessionStart))
         {
             curOpen = value.open;
@@ -40,51 +58,23 @@ class CurrentDayOHL
             if(curLow > value.low) curLow = value.low;
         }
         
-        open = curOpen;
-        high = curHigh;
-        low = curLow;
+        return tuple(curOpen, curHigh, curLow);
     }
 
-    static void evaluate(const ref Bar[] input, TimeOfDay sessionStart, ref double[] open, ref double[] high, ref double[] low)
+    void popFront()
     {
-        assert(input != null);
-        assert(open != null);
-        assert(high != null);
-        assert(low != null);
-        assert(input.length == open.length);
-        assert(input.length == high.length);
-        assert(input.length == low.length);
-        assert(input.length > 0);
-
-        double curOpen = input[0].open;
-        double curHigh = input[0].high;
-        double curLow = input[0].low;
-
-        DateTime lastTime = DateTime.min;
-        
-        for(size_t i=0; i<input.length; i++)
-        {
-            if(isNextSession(lastTime, input[i].time, sessionStart))
-            {
-                curOpen = input[i].open;
-                curHigh = input[i].high;
-                curLow = input[i].low;
-            }
-            else
-            {
-                if(curHigh < input[i].high) curHigh = input[i].high;
-                if(curLow > input[i].low) curLow = input[i].low;
-            }
-            
-            open[i] = curOpen;
-            high[i] = curHigh;
-            low[i] = curLow;
-        }
+        input.popFront();
     }
 }
 
 unittest
 {
+    import std.stdio;
+    import std.algorithm : map;
+    import std.math;
+
+    writeln(">> Current Day OHL tests <<");
+
     auto sessionStart = TimeOfDay(9, 0, 0);
 
     Bar[] bars = 
@@ -100,22 +90,18 @@ unittest
     double[] expHigh = [3, 5, 3, 9, 12];
     double[] expLow = [1, 1, 2, 2, 1];
 
-    double[] evlOpen = new double[expOpen.length];
-    double[] evlHigh = new double[expOpen.length];
-    double[] evlLow = new double[expOpen.length];
+    auto range = curDayOHL(bars, sessionStart);
+    assert(isInputRange!(typeof(range)));
+    auto evaluated = range.array;
+    assert(approxEqual(expOpen, evaluated.map!"a[0]"));
+    assert(approxEqual(expHigh, evaluated.map!"a[1]"));
+    assert(approxEqual(expLow, evaluated.map!"a[2]"));
+    
+    auto wrapped = inputRangeObject(curDayOHL(bars, sessionStart));
+    evaluated = wrapped.array;
+    assert(approxEqual(expOpen, evaluated.map!"a[0]"));
+    assert(approxEqual(expHigh, evaluated.map!"a[1]"));
+    assert(approxEqual(expLow, evaluated.map!"a[2]"));
 
-    CurrentDayOHL.evaluate(bars, sessionStart, evlOpen, evlHigh, evlLow);
-    assert(expOpen == evlOpen);
-    assert(expHigh == evlHigh);
-    assert(expLow == evlLow);
-
-    auto cdOHL = new CurrentDayOHL(sessionStart);
-    for(int i=0; i<bars.length; i++)
-    {
-        double o, h, l;
-        cdOHL.add(bars[i], o, h, l);
-        assert(expOpen[i] == o);
-        assert(expHigh[i] == h);
-        assert(expLow[i] == l);
-    }
+    writeln(">> Current Day OHL tests OK <<");
 }
