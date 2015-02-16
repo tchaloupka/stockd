@@ -47,7 +47,7 @@ struct Sma(R)
 		calcNext();
     }
 
-	private void calcNext() pure nothrow @nogc
+	private void calcNext()
 	{
 		if(empty) _cur = double.nan;
 		else _cur = sma.eval(_input.front);

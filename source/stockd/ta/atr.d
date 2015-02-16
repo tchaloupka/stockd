@@ -64,7 +64,7 @@ struct ATR(R)
         calcNext();
     }
 
-    private void calcNext() pure nothrow @nogc
+    private void calcNext()
     {
         if(empty) _prevAtr = double.nan;
         else

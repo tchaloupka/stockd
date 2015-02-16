@@ -23,11 +23,14 @@
 module stockd.data.nrepeat;
 
 import std.range;
+import stockd.defs;
+import stockd.data.marketdata;
 
 /**
- * Repeats each element of input range n-times
+ * Repeats each element of input range n-times.
+ * Must be class because it is targeted to be reused as input for other ranges and this wont work with structs.
  */
-struct NRepeat(R)
+class NRepeat(R)
     if (isInputRange!R)
 {
     private R _input;
@@ -44,7 +47,7 @@ struct NRepeat(R)
         _times = times;
     }
 
-    @property auto ref front() const
+    @property auto ref front()
     {
         return _current;
     }
@@ -68,7 +71,7 @@ struct NRepeat(R)
 auto nRepeat(R)(R input, uint times)
     if (isInputRange!R)
 {
-    return NRepeat!R(input, times);
+    return new NRepeat!R(input, times);
 }
 
 unittest
@@ -77,4 +80,40 @@ unittest
     assert(equal(nRepeat(a, 1), [1,2,3,4,5][]));
     assert(equal(nRepeat(a, 2), [1,1,2,2,3,3,4,4,5,5][]));
     assert(equal(nRepeat(a, 3), [1,1,1,2,2,2,3,3,3,4,4,4,5,5,5][]));
+
+    string barsText = r"20110715 205500;1.4154;1.41545;1.41491;1.41498;33450
+        20110715 205600;1.415;1.4152;1.41481;1.41481;11360
+        20110715 205700;1.41486;1.41522;1.41477;1.41486;31010
+        20110715 205800;1.41488;1.41506;1.41473;1.41502;15170
+        20110715 205900;1.41489;1.41561;1.41486;1.41561;15280
+        20110715 210000;1.41549;1.41549;1.41532;1.41532;540";
+
+    Bar[] expected = [
+        bar!"20110715 205500;1.4154;1.41545;1.41491;1.41498;33450",
+        bar!"20110715 205500;1.4154;1.41545;1.41491;1.41498;33450",
+        bar!"20110715 205600;1.415;1.4152;1.41481;1.41481;11360",
+        bar!"20110715 205600;1.415;1.4152;1.41481;1.41481;11360",
+        bar!"20110715 205700;1.41486;1.41522;1.41477;1.41486;31010",
+        bar!"20110715 205700;1.41486;1.41522;1.41477;1.41486;31010",
+        bar!"20110715 205800;1.41488;1.41506;1.41473;1.41502;15170",
+        bar!"20110715 205800;1.41488;1.41506;1.41473;1.41502;15170",
+        bar!"20110715 205900;1.41489;1.41561;1.41486;1.41561;15280",
+        bar!"20110715 205900;1.41489;1.41561;1.41486;1.41561;15280",
+        bar!"20110715 210000;1.41549;1.41549;1.41532;1.41532;540",
+        bar!"20110715 210000;1.41549;1.41549;1.41532;1.41532;540"
+    ];
+
+    auto range = nRepeat(marketData(barsText), 2);
+    assert(isInputRange!(typeof(range)));
+    assert(is(ElementType!(typeof(range)) == Bar));
+    auto data = range.array;
+    assert(data == expected);
+
+    range = nRepeat(marketData(barsText), 2);
+    for(int i=0; !range.empty; i++)
+    {
+        assert(range.front == expected[i*2]);
+        range.popFront();
+        range.popFront();
+    }
 }

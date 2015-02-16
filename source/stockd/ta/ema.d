@@ -53,7 +53,7 @@ struct Ema(R, bool sma = true)
         calcNext();
     }
 
-    private void calcNext() pure nothrow @nogc
+    private void calcNext()
     {
         if(empty) _cur = double.nan;
         else

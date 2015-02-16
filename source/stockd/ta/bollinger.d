@@ -69,7 +69,7 @@ struct Bollinger(R)
         calcNext();
     }
 
-    private void calcNext() pure nothrow @nogc
+    private void calcNext()
     {
         if(empty) _cur = tuple(double.nan, double.nan, double.nan);
         else

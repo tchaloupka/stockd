@@ -43,7 +43,7 @@ struct Min(R)
         calcNext();
     }
 
-    private void calcNext() pure nothrow @nogc
+    private void calcNext()
     {
         if(empty) _cur = double.nan;
         else _cur = min.eval(_input.front);

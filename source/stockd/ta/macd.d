@@ -91,7 +91,7 @@ struct MACD(R)
         calcNext();
     }
 
-    private void calcNext() pure nothrow @nogc
+    private void calcNext()
     {
         if(empty) _cur = tuple(double.nan, double.nan, double.nan);
         else
@@ -103,7 +103,7 @@ struct MACD(R)
             double macd = f - s;
             double signal = smooth.eval(macd);
             double hist = macd - signal;
-            
+
             _cur = tuple(macd, signal, hist);
         }
     }
