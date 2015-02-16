@@ -47,6 +47,7 @@ struct MACD(R)
     mixin Ema smooth;
 
     private R _input;
+    private Tuple!(double, double, double) _cur;
     
     /**
      * Constructor
@@ -62,6 +63,8 @@ struct MACD(R)
         fast.initialize(fastPeriod);
         slow.initialize(slowPeriod);
         smooth.initialize(smoothPeriod);
+
+        calcNext();
     }
 
     @property bool empty()
@@ -77,23 +80,32 @@ struct MACD(R)
      *      signal  - smoothed macd line
      *      hist    - difference between macd and signal lines
      */
-    //pure nothrow void add(double value, out double macd, out double signal, out double hist)
     @property auto front()
     {
-        auto value = _input.front;
-        double f = fast.eval(value);
-        double s = slow.eval(value);
-        
-        double macd = f - s;
-        double signal = smooth.eval(macd);
-        double hist = macd - signal;
-
-        return tuple(macd, signal, hist);
+        return _cur;
     }
 
     void popFront()
     {
         _input.popFront();
+        calcNext();
+    }
+
+    private void calcNext() pure nothrow @nogc
+    {
+        if(empty) _cur = tuple(double.nan, double.nan, double.nan);
+        else
+        {
+            auto value = _input.front;
+            double f = fast.eval(value);
+            double s = slow.eval(value);
+            
+            double macd = f - s;
+            double signal = smooth.eval(macd);
+            double hist = macd - signal;
+            
+            _cur = tuple(macd, signal, hist);
+        }
     }
 }
 
@@ -123,6 +135,20 @@ unittest
     assert(approxEqual(expMACD, evaluated.map!"a[0]"));
     assert(approxEqual(expSignal, evaluated.map!"a[1]"));
     assert(approxEqual(expHist, evaluated.map!"a[2]"));
+
+    // repeated front access test
+    range = macd(input, 12, 26, 9);
+    foreach(i; 0..expMACD.length)
+    {
+        foreach(j; 0..10)
+        {
+            auto front = range.front;
+            assert(approxEqual(front[0], expMACD[i]));
+            assert(approxEqual(front[1], expSignal[i]));
+            assert(approxEqual(front[2], expHist[i]));
+        }
+        range.popFront();
+    }
 
     writeln(">> MACD tests OK <<");
 }

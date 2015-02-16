@@ -36,13 +36,15 @@ struct ATR(R)
 
     mixin TrueRange tr;
     
-    this(R input, ushort period = 14)
+    this(R input, ushort period = 14) pure nothrow @nogc
     {
         assert(period > 0);
 
         this._input = input;
         this._period = period;
         this._lPeriod = cast(ushort)(period - 1);
+
+        calcNext();
     }
     
     @property bool empty()
@@ -52,27 +54,35 @@ struct ATR(R)
     
     @property auto front()
     {
-        auto bar = _input.front;
-
-        double nextTR = tr.eval(bar);
-
-        if(_idx == 0)
-        {
-            _prevAtr = nextTR;
-        }
-        else
-        {
-            if(_idx < _period) _prevAtr = (_prevAtr * _idx + nextTR) / (_idx + 1);
-            else _prevAtr = (_prevAtr * _lPeriod + nextTR) / _period;
-        }
-
         return _prevAtr;
     }
-    
+
     void popFront()
     {
         _idx++;
         _input.popFront();
+        calcNext();
+    }
+
+    private void calcNext() pure nothrow @nogc
+    {
+        if(empty) _prevAtr = double.nan;
+        else
+        {
+            auto bar = _input.front;
+
+            double nextTR = tr.eval(bar);
+
+            if(_idx == 0)
+            {
+                _prevAtr = nextTR;
+            }
+            else
+            {
+                if(_idx < _period) _prevAtr = (_prevAtr * _idx + nextTR) / (_idx + 1);
+                else _prevAtr = (_prevAtr * _lPeriod + nextTR) / _period;
+            }
+        }
     }
 }
 
@@ -135,6 +145,16 @@ unittest
     evaluated = wrapped.array;
     assert(approxEqual(expected, evaluated));
 
+    // repeated front access test
+    range = atr(bars, 14);
+    foreach(i; 0..expected.length)
+    {
+        foreach(j; 0..10)
+        {
+            assert(approxEqual(range.front, expected[i]));
+        }
+        range.popFront();
+    }
+
     writeln(">> ATR tests OK <<");
 }
-

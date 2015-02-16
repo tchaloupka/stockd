@@ -112,5 +112,16 @@ unittest
     eval = wrapped.array;
     assert(equal(expected, eval));
 
+	// repeated front access test
+	range = heikenAshi(data);
+	foreach(i; 0..expected.length)
+	{
+		foreach(j; 0..10)
+		{
+			assert(range.front == expected[i]);
+		}
+		range.popFront();
+	}
+
     writeln(">> HeikenAshi tests OK <<");
 }

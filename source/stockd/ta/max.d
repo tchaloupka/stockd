@@ -18,11 +18,13 @@ struct Max(R)
 {
     mixin MinMax!(false) max;
     private R _input;
+    private double _cur;
 
     this(R input, ushort period = 14)
     {
         max.initialize(period);
         this._input = input;
+        calcNext();
     }
 
     @property bool empty()
@@ -32,12 +34,19 @@ struct Max(R)
     
     @property auto front()
     {
-        return max.eval(_input.front);
+        return _cur;
     }
 
     void popFront()
     {
         _input.popFront();
+        calcNext();
+    }
+
+    private void calcNext() pure nothrow @nogc
+    {
+        if(empty) _cur = double.nan;
+        else _cur = max.eval(_input.front);
     }
 }
 
@@ -59,6 +68,17 @@ unittest
     auto wrapped = inputRangeObject(max(input, 4));
     evaluated = wrapped.array;
     assert(approxEqual(expected, evaluated));
+
+    // repeated front access test
+    range = max(input, 4);
+    foreach(i; 0..expected.length)
+    {
+        foreach(j; 0..10)
+        {
+            assert(approxEqual(range.front, expected[i]));
+        }
+        range.popFront();
+    }
 
     writeln(">> Max tests OK <<");
 }

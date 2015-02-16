@@ -22,6 +22,7 @@ struct Median(R)
     if(isInputRange!R && is(ElementType!R == Bar))
 {
     private R _input;
+	private double _cur;
 
     mixin MinMax!(true) min;
     mixin MinMax!(false) max;
@@ -31,6 +32,7 @@ struct Median(R)
         min.initialize(period);
         max.initialize(period);
         this._input = input;
+		calcNext();
     }
 
     @property bool empty()
@@ -40,15 +42,20 @@ struct Median(R)
     
     @property auto front()
     {
-        auto val = _input.front;
-
-        return (max.eval(val.high) + min.eval(val.low))/2;
+		return _cur;
     }
 
     void popFront()
     {
         _input.popFront();
+		calcNext();
     }
+
+	private void calcNext() pure nothrow @nogc
+	{
+		if(empty) _cur = double.nan;
+		else _cur = (max.eval(_input.front.high) + min.eval(_input.front.low))/2;
+	}
 }
 
 unittest
@@ -111,6 +118,17 @@ unittest
     auto wrapped = inputRangeObject(median(bars, 7));
     evaluated = wrapped.array;
     assert(approxEqual(expected, evaluated));
+
+	// repeated front access test
+	range = median(bars, 7);
+	foreach(i; 0..expected.length)
+	{
+		foreach(j; 0..10)
+		{
+			assert(approxEqual(range.front, expected[i]));
+		}
+		range.popFront();
+	}
 
     writeln(">> Median tests OK <<");
 }

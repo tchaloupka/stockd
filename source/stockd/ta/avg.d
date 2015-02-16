@@ -17,22 +17,10 @@ struct Average(R)
 {
     private R _input;
     
-    this(R input)
+    this(R input) pure nothrow @nogc
     {
         this._input = input;
     }
-    
-//    int opApply(scope int delegate(double) func)
-//    {
-//        int result;
-//        
-//        foreach(ref cur; _input)
-//        {
-//            result = func((cur.open + cur.high + cur.low + cur.close)*0.25);
-//            if(result) break;
-//        }
-//        return result;
-//    }
     
     @property bool empty()
     {
@@ -75,6 +63,17 @@ unittest
     auto wrapped = inputRangeObject(average(bars));
     evaluated = wrapped.array;
     assert(approxEqual(expected, evaluated));
+
+    // repeated front access test
+    range = average(bars);
+    foreach(i; 0..expected.length)
+    {
+        foreach(j; 0..10)
+        {
+            assert(approxEqual(range.front, expected[i]));
+        }
+        range.popFront();
+    }
 
     writeln(">> AVG tests OK <<");
 }

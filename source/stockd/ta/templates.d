@@ -43,14 +43,14 @@ mixin template Ema(bool useSma = true)
     private double _lastVal = 0;
     private ushort _period;
 
-    void initialize(ushort per = 12)
+    void initialize(ushort per = 12) pure nothrow @nogc
     {
         _period = per;
         _m1 = 2.0/(1 + _period);
         _m2 = 1 - _m1;
     }
 
-    double eval(double value)
+    double eval(double value) pure nothrow @nogc
     {
         if(!_hasVal)
         {
@@ -94,7 +94,7 @@ mixin template Sma()
     private ushort _idx;
     private double[] _buffer;
 
-    void initialize(ushort period = 12)
+    void initialize(ushort period = 12) pure nothrow
     {
         assert(period > 0);
         
@@ -102,7 +102,7 @@ mixin template Sma()
         _buffer = new double[period];
     }
 
-    double eval(double value)
+    double eval(double value) pure nothrow @nogc
     {
         if(!_isFull)
         {
@@ -128,6 +128,9 @@ mixin template Sma()
     }
 }
 
+/**
+ * Template fof min or max evaluaton for time period
+ */
 mixin template MinMax(bool min = true)
 {
     private ushort _period;
@@ -136,7 +139,7 @@ mixin template MinMax(bool min = true)
     private double _minmax = min ? int.max : int.min;
     private double[] _buffer;
     
-    void initialize(ushort period = 14)
+    void initialize(ushort period = 14) pure nothrow
     {
         assert(period > 0);
         
@@ -144,7 +147,7 @@ mixin template MinMax(bool min = true)
         _buffer = new double[period];
     }
     
-    pure nothrow double eval(double value)
+    double eval(double value) pure nothrow @nogc
     {
         bool gen = false;
         if (_isBuffFull)
@@ -201,19 +204,22 @@ mixin template MinMax(bool min = true)
     }
 }
 
+/**
+ * Template for standard deviation calculation
+ */
 mixin template StdDev(bool withAverage = false)
 {
     import stockd.ta.templates : Sma;
     mixin Sma sma;
 
-    void initialize(ushort perd)
+    void initialize(ushort perd) pure nothrow
     {
         assert(perd > 0);
 
         sma.initialize(perd);
     }
 
-    auto eval(double value)
+    auto eval(double value) pure nothrow @nogc
     {
         import std.math : sqrt;
         static if(withAverage) import std.typecons : tuple;
@@ -240,13 +246,17 @@ mixin template StdDev(bool withAverage = false)
     }
 }
 
+
+/**
+ * Template for true range calculation
+ */
 mixin template TrueRange()
 {
     import stockd.defs.bar;
 
     private double _prevClose = double.nan;
 
-    private double eval(Bar bar)
+    private double eval(Bar bar) pure nothrow @nogc
     {
         import std.math : isNaN, abs;
         import std.algorithm : max;

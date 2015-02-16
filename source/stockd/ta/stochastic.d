@@ -42,6 +42,7 @@ struct Stochastic(R)
 {
     private R _input;
     private double _prevFastK = 50;
+	private Tuple!(double, double) _cur;
 
     mixin MinMax!false maxeval;
     mixin MinMax!true mineval;
@@ -60,6 +61,7 @@ struct Stochastic(R)
         dSmooth.initialize(dSmoothPeriod);
 
         this._input = input;
+		calcNext();
     }
 
     @property bool empty()
@@ -69,25 +71,35 @@ struct Stochastic(R)
     
     @property auto front()
     {
-        auto val = _input.front;
-        double min = mineval.eval(val.low);
-        double max = maxeval.eval(val.high);
-        
-        double nom = val.close - min;
-        double den = max - min;
-        
-        _prevFastK = den < 0.000000000001 ? _prevFastK : 100 * nom / den;
-        
-        double k = kSmooth.eval(_prevFastK);
-        double d = dSmooth.eval(k);
-        
-        return tuple(k, d);
+		return _cur;
     }
 
     void popFront()
     {
         _input.popFront();
+		calcNext();
     }
+
+	private void calcNext() pure nothrow @nogc
+	{
+		if(empty) _cur = tuple(double.nan, double.nan);
+		else
+		{
+			auto val = _input.front;
+			double min = mineval.eval(val.low);
+			double max = maxeval.eval(val.high);
+			
+			double nom = val.close - min;
+			double den = max - min;
+			
+			_prevFastK = den < 0.000000000001 ? _prevFastK : 100 * nom / den;
+			
+			double k = kSmooth.eval(_prevFastK);
+			double d = dSmooth.eval(k);
+			
+			_cur = tuple(k, d);
+		}
+	}
 }
 
 unittest
@@ -153,6 +165,19 @@ unittest
     evaluated = wrapped.array;
     assert(approxEqual(expectedK, evaluated.map!"a[0]"));
     assert(approxEqual(expectedD, evaluated.map!"a[1]"));
+
+	// repeated front access test
+	range = stochastic(bars, 14, 3, 7);
+	foreach(i; 0..expectedK.length)
+	{
+		foreach(j; 0..10)
+		{
+			auto front = range.front;
+			assert(approxEqual(front[0], expectedK[i]));
+			assert(approxEqual(front[1], expectedD[i]));
+		}
+		range.popFront();
+	}
 
     writeln(">> Stochastic tests OK <<");
 }

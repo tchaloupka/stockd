@@ -82,5 +82,16 @@ unittest
     evaluated = wrapped.array;
     assert(approxEqual(expected, evaluated));
 
+	// repeated front access test
+	range = typicalPrice(bars);
+	foreach(i; 0..expected.length)
+	{
+		foreach(j; 0..10)
+		{
+			assert(approxEqual(range.front, expected[i]));
+		}
+		range.popFront();
+	}
+
     writeln(">> TypicalPrice tests OK <<");
 }

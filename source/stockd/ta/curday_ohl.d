@@ -103,5 +103,19 @@ unittest
     assert(approxEqual(expHigh, evaluated.map!"a[1]"));
     assert(approxEqual(expLow, evaluated.map!"a[2]"));
 
+	// repeated front access test
+	range = curDayOHL(bars, sessionStart);
+	foreach(i; 0..expOpen.length)
+	{
+		foreach(j; 0..10)
+		{
+			auto cur = range.front;
+			assert(approxEqual(cur[0], expOpen[i]));
+			assert(approxEqual(cur[1], expHigh[i]));
+			assert(approxEqual(cur[2], expLow[i]));
+		}
+		range.popFront();
+	}
+
     writeln(">> Current Day OHL tests OK <<");
 }

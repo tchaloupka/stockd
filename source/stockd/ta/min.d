@@ -18,11 +18,13 @@ struct Min(R)
 {
     mixin MinMax!(true) min;
     private R _input;
+    private double _cur;
 
     this(R input, ushort period = 14)
     {
         min.initialize(period);
         this._input = input;
+        calcNext();
     }
 
     @property bool empty()
@@ -32,12 +34,19 @@ struct Min(R)
     
     @property auto front()
     {
-        return min.eval(_input.front);
+        return _cur;
     }
 
     void popFront()
     {
         _input.popFront();
+        calcNext();
+    }
+
+    private void calcNext() pure nothrow @nogc
+    {
+        if(empty) _cur = double.nan;
+        else _cur = min.eval(_input.front);
     }
 }
 
@@ -59,6 +68,17 @@ unittest
     auto wrapped = inputRangeObject(min(input, 4));
     evaluated = wrapped.array;
     assert(approxEqual(expected, evaluated));
+
+    // repeated front access test
+    range = min(input, 4);
+    foreach(i; 0..expected.length)
+    {
+        foreach(j; 0..10)
+        {
+            assert(approxEqual(range.front, expected[i]));
+        }
+        range.popFront();
+    }
 
     writeln(">> Min tests OK <<");
 }

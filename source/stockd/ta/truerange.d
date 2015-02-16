@@ -34,11 +34,13 @@ struct TrueRange(R)
     if(isInputRange!R && is(ElementType!R == Bar))
 {
     private R _input;
+    private double _cur;
     mixin tmp.TrueRange tr;
     
     this(R input)
     {
         this._input = input;
+        calcNext();
     }
     
     @property bool empty()
@@ -48,12 +50,19 @@ struct TrueRange(R)
     
     @property auto front()
     {
-        return tr.eval(_input.front);
+        return _cur;
     }
     
     void popFront()
     {
         _input.popFront();
+        calcNext();
+    }
+
+    private void calcNext() pure nothrow @nogc
+    {
+        if(empty) _cur = double.nan;
+        else _cur = tr.eval(_input.front);
     }
 }
 
@@ -120,6 +129,17 @@ unittest
     auto wrapped = inputRangeObject(trueRange(bars));
     eval = wrapped.array;
     assert(approxEqual(expected, eval));
+
+    // repeated front access test
+    range = trueRange(bars);
+    foreach(i; 0..expected.length)
+    {
+        foreach(j; 0..10)
+        {
+            assert(approxEqual(range.front, expected[i]));
+        }
+        range.popFront();
+    }
 
     writeln(">> TrueRange tests OK <<");
 }

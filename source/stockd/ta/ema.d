@@ -23,6 +23,7 @@ struct Ema(R, bool sma = true)
 {
     mixin tmp.Ema!(sma) ema;
     private R _input;
+    private double _cur;
 
     /**
      * Params:
@@ -33,6 +34,7 @@ struct Ema(R, bool sma = true)
     {
         ema.initialize(period);
         this._input = input;
+        calcNext();
     }
 
     @property bool empty()
@@ -42,12 +44,22 @@ struct Ema(R, bool sma = true)
     
     @property auto front()
     {
-        return ema.eval(_input.front);
+        return _cur;
     }
 
     void popFront()
     {
         _input.popFront();
+        calcNext();
+    }
+
+    private void calcNext() pure nothrow @nogc
+    {
+        if(empty) _cur = double.nan;
+        else
+        {
+            _cur = ema.eval(_input.front);
+        }
     }
 }
 
@@ -75,6 +87,17 @@ unittest
     auto wrapped = inputRangeObject(ema(input, 10));
     evaluated = wrapped.array;
     assert(approxEqual(expectedSMA, evaluated));
+
+    // repeated front access test
+    range = ema(input, 10);
+    foreach(i; 0..expectedSMA.length)
+    {
+        foreach(j; 0..10)
+        {
+            assert(approxEqual(range.front, expectedSMA[i]));
+        }
+        range.popFront();
+    }
 
     writeln(">> EMA tests OK <<");
 }

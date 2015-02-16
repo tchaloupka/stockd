@@ -45,11 +45,13 @@ struct CCI(R)
 {
     mixin Sma sma;
     private R _input;
+    private double _cur;
 
     this(R input, ushort period = 14)
     {
         sma.initialize(period);
         this._input = input;
+        calcNext();
     }
 
     @property bool empty()
@@ -59,22 +61,32 @@ struct CCI(R)
     
     @property auto front()
     {
-        auto value = _input.front;
-
-        double typical = (value.high + value.low + value.close)/3;
-        double avg = sma.eval(typical);
-        
-        double mean = 0;
-        int len = _isFull ? _period : _idx;
-        for (int i = len - 1; i >= 0; i--) { mean += abs(_buffer[i] - avg); }
-        mean = mean / len;
-        
-        return (typical - avg) / (mean == 0 ? 1 : (0.015 * mean));
+        return _cur;
     }
 
     void popFront()
     {
         _input.popFront();
+        calcNext();
+    }
+
+    private void calcNext() pure nothrow @nogc
+    {
+        if(empty) _cur = double.nan;
+        else
+        {
+            auto value = _input.front;
+
+            double typical = (value.high + value.low + value.close)/3;
+            double avg = sma.eval(typical);
+
+            double mean = 0;
+            int len = _isFull ? _period : _idx;
+            for (int i = len - 1; i >= 0; i--) { mean += abs(_buffer[i] - avg); }
+            mean = mean / len;
+
+            _cur = (typical - avg) / (mean == 0 ? 1 : (0.015 * mean));
+        }
     }
 }
 
@@ -136,6 +148,17 @@ unittest
     auto wrapped = inputRangeObject(cci(bars, 20));
     evaluated = wrapped.array;
     assert(approxEqual(expected, evaluated));
+
+    // repeated front access test
+    range = cci(bars, 20);
+    foreach(i; 0..expected.length)
+    {
+        foreach(j; 0..10)
+        {
+            assert(approxEqual(range.front, expected[i]));
+        }
+        range.popFront();
+    }
 
     writeln(">> CCI tests OK <<");
 }

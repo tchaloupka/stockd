@@ -260,7 +260,7 @@ struct Bar
     mixin property!(double, "high", 0);
     mixin property!(double, "low", 0);
     mixin property!(double, "close", 0);
-    mixin property!(size_t, "volume");
+    mixin property!(ulong, "volume");
 
     /**
      * Params:

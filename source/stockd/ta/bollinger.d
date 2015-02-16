@@ -38,6 +38,7 @@ struct Bollinger(R)
 {
     private double _stdDevNum;
     private R _input;
+    private Tuple!(double, double, double) _cur;
 
     mixin StdDev!true stdd;
 
@@ -47,6 +48,8 @@ struct Bollinger(R)
 
         this._stdDevNum = stdDevNum;
         this._input = input;
+
+        calcNext();
     }
 
     @property bool empty()
@@ -57,14 +60,23 @@ struct Bollinger(R)
     /// Returns tuple of middle, upper, lower
     @property auto front()
     {
-        auto std = stdd.eval(_input.front);
-
-        return tuple(std[0], std[0] + std[1] * _stdDevNum, std[0] - std[1] * _stdDevNum);
+        return _cur;
     }
 
     void popFront()
     {
         _input.popFront();
+        calcNext();
+    }
+
+    private void calcNext() pure nothrow @nogc
+    {
+        if(empty) _cur = tuple(double.nan, double.nan, double.nan);
+        else
+        {
+            auto std = stdd.eval(_input.front);
+            _cur = tuple(std[0], std[0] + std[1] * _stdDevNum, std[0] - std[1] * _stdDevNum);
+        }
     }
 }
 
@@ -93,6 +105,20 @@ unittest
     assert(approxEqual(expMid, evaluated.map!("a[0]")));
     assert(approxEqual(expUpper, evaluated.map!("a[1]")));
     assert(approxEqual(expLower, evaluated.map!("a[2]")));
+
+    // repeated front access test
+    range = bollinger(input, 20, 2.0);
+    foreach(i; 0..expMid.length)
+    {
+        foreach(j; 0..10)
+        {
+            auto front = range.front;
+            assert(approxEqual(front[0], expMid[i]));
+            assert(approxEqual(front[1], expUpper[i]));
+            assert(approxEqual(front[2], expLower[i]));
+        }
+        range.popFront();
+    }
 
     writeln(">> Bollinger tests OK <<");
 }

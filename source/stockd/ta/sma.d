@@ -17,6 +17,7 @@ struct Sma(R)
     if(isInputRange!R && is(ElementType!R == double))
 {
     private R _input;
+	private double _cur;
     mixin tmp.Sma sma;
     
     /**
@@ -27,6 +28,7 @@ struct Sma(R)
     {
         sma.initialize(period);
         this._input = input;
+		calcNext();
     }
     
     @property bool empty()
@@ -36,13 +38,20 @@ struct Sma(R)
     
     @property auto front()
     {
-        return sma.eval(_input.front);
+		return _cur;
     }
     
     void popFront()
     {
         _input.popFront();
+		calcNext();
     }
+
+	private void calcNext() pure nothrow @nogc
+	{
+		if(empty) _cur = double.nan;
+		else _cur = sma.eval(_input.front);
+	}
 }
 
 unittest
@@ -63,6 +72,17 @@ unittest
     auto wrapped = inputRangeObject(sma(input, 10));
     evaluated = wrapped.array;
     assert(approxEqual(expected, evaluated));
+
+	// repeated front access test
+	range = sma(input, 10);
+	foreach(i; 0..expected.length)
+	{
+		foreach(j; 0..10)
+		{
+			assert(approxEqual(range.front, expected[i]));
+		}
+		range.popFront();
+	}
 
     writeln(">> SMA tests OK <<");
 }

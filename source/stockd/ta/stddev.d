@@ -36,12 +36,14 @@ struct StdDev(R)
     if(isInputRange!R && is(ElementType!R == double))
 {
     private R _input;
+    private double _cur;
     mixin tmp.StdDev stdd;
 
     this(R input, ushort period = 14)
     {
         stdd.initialize(period);
         this._input = input;
+        calcNext();
     }
 
     @property bool empty()
@@ -51,12 +53,19 @@ struct StdDev(R)
     
     @property auto front()
     {
-        return stdd.eval(_input.front);
+        return _cur;
     }
 
     void popFront()
     {
         _input.popFront();
+        calcNext();
+    }
+
+    private void calcNext() pure nothrow @nogc
+    {
+        if(empty) _cur = double.nan;
+        else _cur = stdd.eval(_input.front);
     }
 }
 
@@ -78,6 +87,17 @@ unittest
     auto wrapped = inputRangeObject(stddev(input, 20));
     evaluated = wrapped.array;
     assert(approxEqual(expected, evaluated));
+
+    // repeated front access test
+    range = stddev(input, 20);
+    foreach(i; 0..expected.length)
+    {
+        foreach(j; 0..10)
+        {
+            assert(approxEqual(range.front, expected[i]));
+        }
+        range.popFront();
+    }
 
     writeln(">> StdDev tests OK <<");
 }
