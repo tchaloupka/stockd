@@ -1,19 +1,13 @@
 ﻿module stockd.data.ringbuffer;
 
 struct RingBuffer(T, size_t N = 0)
+    if(N > 0)
 {
     private
     {
-        static if( N > 0 ) T[N] m_buffer;
-        else T[] m_buffer;
-
+        T[N] m_buffer;
         size_t m_start = 0;
         size_t m_fill = 0;
-    }
-
-    static if( N == 0 )
-    {
-        this(size_t capacity) { m_buffer = new T[capacity]; }
     }
 
     @property bool empty() const { return m_fill == 0; }
@@ -21,27 +15,6 @@ struct RingBuffer(T, size_t N = 0)
     @property size_t length() const { return m_fill; }
     @property size_t freeSpace() const { return m_buffer.length - m_fill; }
     @property size_t capacity() const { return m_buffer.length; }
-
-    static if( N == 0 )
-    {
-        @property void capacity(size_t new_size)
-        {
-            if( m_buffer.length )
-            {
-                auto newbuffer = new T[new_size];
-                auto dst = newbuffer;
-                auto newfill = min(m_fill, new_size);
-                read(dst[0 .. newfill]);
-                m_buffer = newbuffer;
-                m_start = 0;
-                m_fill = newfill;
-            }
-            else
-            {
-                m_buffer = new T[new_size];
-            }
-        }
-    }
 
     @property ref inout(T) front() inout 
     { 
@@ -85,6 +58,7 @@ struct RingBuffer(T, size_t N = 0)
         {
             m_buffer[mod(m_start + m_fill) .. mod(m_start + m_fill) + itms.length] = itms[];
         }
+
         m_fill += itms.length;
     }
 
@@ -228,18 +202,9 @@ struct RingBuffer(T, size_t N = 0)
         return length;
     }
 
-    private size_t mod(size_t n)
-        
-    const {
-        static if( N == 0 )
-        {
-            /*static if(PotOnly){
-             return x & (m_buffer.length-1);
-             } else {*/
-            return n % m_buffer.length;
-            //}
-        }
-        else static if( ((N - 1) & N) == 0 )
+    private size_t mod(size_t n) const
+    {
+        static if( ((N - 1) & N) == 0 )
         {
             return n & (N - 1);
         }
