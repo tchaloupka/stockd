@@ -23,8 +23,9 @@ auto marketData(T)(T input, in S.Symbol symbol = S.Symbol.init, TimeFrame tf = T
     {
         static if(is(T == File))
         {
+            import std.string : chomp;
             //make input range from file
-            auto _input = input.byLine().map!"a.idup";
+            auto _input = input.byLine().map!(a=>a.chomp().idup).filter!(a=>a.length > 0);
         }
         else static if(isSomeString!T)
         {
